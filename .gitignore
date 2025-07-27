@@ -16,4 +16,5 @@ build/
 
 models/whisper*
 samples/*
+temp_dialog/
 
