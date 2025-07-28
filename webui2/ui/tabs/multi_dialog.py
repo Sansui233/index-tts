@@ -13,7 +13,6 @@ from ..components import (
 
 def create_multi_dialog_tab(tts_manager):
     """Create the multi-dialog generation tab"""
-    gr.Markdown("请为每个角色上传参考音频，然后在下方输入对话内容")
 
     with gr.Row(elem_id="multi-dialog"):
         # navigation section
@@ -27,6 +26,7 @@ def create_multi_dialog_tab(tts_manager):
 
         # Speaker configuration rows
         with gr.Column(scale=9):
+            gr.Markdown("请为每个角色上传参考音频，然后在下方输入对话内容")
             with gr.Row(elem_id="anchor-multi_dialog_roles"):
                 with gr.Row(elem_classes="multi_dialog-roles"):
                     speaker1_name = gr.Textbox(
