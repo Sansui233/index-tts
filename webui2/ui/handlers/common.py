@@ -9,11 +9,7 @@ import gradio as gr
 import numpy as np
 from scipy.io import wavfile
 
-from ..audio import mix_audio_with_bgm
-from ..utils import PresetManager, apply_preset_data, collect_preset_data
-
-# Initialize preset manager
-preset_manager = PresetManager()
+from ...audio import mix_audio_with_bgm
 
 
 def gen_audio(
@@ -85,9 +81,7 @@ def gen_audio(
     # Generate subtitle
     subtitle_path = None
     if gen_subtitle:
-        subtitle_path = subtitle_manager.generate_subtitles(
-            output_path, model_choice, subtitle_lang
-        )
+        subtitle_path = subtitle_manager.generate_subtitles(output_path, model_choice, subtitle_lang)
 
     # Mix with background music
     bgm_paths = []
@@ -98,14 +92,10 @@ def gen_audio(
             bgm_paths.append(file.name)
 
     if bgm_paths:
-        mixed_output_path = mix_audio_with_bgm(
-            output_path, bgm_paths, volume=bgm_volume, loop=bgm_loop
-        )
+        mixed_output_path = mix_audio_with_bgm(output_path, bgm_paths, volume=bgm_volume, loop=bgm_loop)
         output_path = mixed_output_path
 
-    return gr.update(value=output_path, visible=True), gr.update(
-        value=subtitle_path, visible=bool(subtitle_path)
-    )
+    return gr.update(value=output_path, visible=True), gr.update(value=subtitle_path, visible=bool(subtitle_path))
 
 
 def gen_multi_dialog_audio(
@@ -196,9 +186,7 @@ def gen_multi_dialog_audio(
 
         if line.startswith("[") and "]" in line:
             if current_speaker and current_text:
-                dialog_lines.append(
-                    {"speaker": current_speaker, "text": " ".join(current_text)}
-                )
+                dialog_lines.append({"speaker": current_speaker, "text": " ".join(current_text)})
                 current_text = []
 
             end_index = line.index("]")
@@ -211,9 +199,7 @@ def gen_multi_dialog_audio(
             current_text.append(line)
 
     if current_speaker and current_text:
-        dialog_lines.append(
-            {"speaker": current_speaker, "text": " ".join(current_text)}
-        )
+        dialog_lines.append({"speaker": current_speaker, "text": " ".join(current_text)})
 
     if not dialog_lines:
         progress(1.0, "未识别到有效对话")
@@ -277,9 +263,7 @@ def gen_multi_dialog_audio(
     # Generate subtitle
     subtitle_path = None
     if gen_subtitle:
-        subtitle_path = subtitle_manager.generate_subtitles(
-            output_path, model_choice, subtitle_lang
-        )
+        subtitle_path = subtitle_manager.generate_subtitles(output_path, model_choice, subtitle_lang)
 
     # Mix with background music
     bgm_paths = []
@@ -290,159 +274,7 @@ def gen_multi_dialog_audio(
             bgm_paths.append(file.name)
 
     if bgm_paths:
-        mixed_output_path = mix_audio_with_bgm(
-            output_path, bgm_paths, volume=bgm_volume, loop=bgm_loop
-        )
+        mixed_output_path = mix_audio_with_bgm(output_path, bgm_paths, volume=bgm_volume, loop=bgm_loop)
         output_path = mixed_output_path
 
-    return gr.update(value=output_path, visible=True), gr.update(
-        value=subtitle_path, visible=bool(subtitle_path)
-    )
-
-
-def on_input_text_change(tts, text, max_tokens_per_sentence):
-    """Handle input text change for sentence preview"""
-    if text and len(text) > 0:
-        text_tokens_list = tts.tokenizer.tokenize(text)
-        sentences = tts.tokenizer.split_sentences(
-            text_tokens_list, max_tokens_per_sentence=int(max_tokens_per_sentence)
-        )
-        data = []
-        for i, s in enumerate(sentences):
-            sentence_str = "".join(s)
-            tokens_count = len(s)
-            data.append([i, sentence_str, tokens_count])
-
-        return gr.update(value=data, visible=True, type="array")
-    else:
-        return gr.update(value=[])
-
-
-def update_prompt_audio():
-    """Handle prompt audio update"""
-    return gr.update(interactive=True)
-
-
-# Preset management functions
-def refresh_preset_list():
-    """Refresh the preset dropdown list"""
-    preset_list = preset_manager.get_preset_list()
-    choices = preset_list if preset_list else []
-    return gr.update(choices=choices, value=choices[0] if choices else None)
-
-
-def load_preset_handler(preset_name):
-    """Handle loading a preset"""
-    if not preset_name:
-        return (
-            [gr.update()] * 26
-        )  # Return empty updates for all components (20 + 6 server audio dropdowns)
-
-    preset_data = preset_manager.load_preset(preset_name)
-    if not preset_data:
-        return [gr.update()] * 26
-
-    updates = apply_preset_data(preset_data)
-
-    # Return updates in the order of components
-    result = []
-    # Speaker names (6)
-    for i in range(1, 7):
-        key = f"speaker{i}_name"
-        result.append(gr.update(value=updates.get(key, f"角色{i}")))
-
-    # Server audio dropdowns (6)
-    for i in range(1, 7):
-        key = f"speaker{i}_server_audio"
-        result.append(gr.update(value=updates.get(key, "")))
-
-    # Settings (6)
-    result.append(gr.update(value=updates.get("interval", 0.5)))
-    result.append(gr.update(value=updates.get("gen_subtitle_multi", True)))
-    result.append(gr.update(value=updates.get("model_choice_multi", "whisper-base")))
-    result.append(gr.update(value=updates.get("subtitle_lang_multi", "zh")))
-    result.append(gr.update(value=updates.get("bgm_volume_multi", 0.3)))
-    result.append(gr.update(value=updates.get("bgm_loop_multi", True)))
-
-    # Advanced params (8)
-    result.append(gr.update(value=updates.get("do_sample", True)))
-    result.append(gr.update(value=updates.get("top_p", 0.8)))
-    result.append(gr.update(value=updates.get("top_k", 30)))
-    result.append(gr.update(value=updates.get("temperature", 1.0)))
-    result.append(gr.update(value=updates.get("length_penalty", 0.0)))
-    result.append(gr.update(value=updates.get("num_beams", 3)))
-    result.append(gr.update(value=updates.get("repetition_penalty", 10.0)))
-    result.append(gr.update(value=updates.get("max_mel_tokens", 600)))
-
-    return result
-
-
-def save_preset_handler(preset_name, *args):
-    """Handle saving a preset"""
-    if not preset_name or not preset_name.strip():
-        return gr.update(value="❌ 请输入预设名称"), refresh_preset_list()
-
-    preset_name = preset_name.strip()
-
-    # Extract parameters from args
-    # Speaker names (6) + Server audio paths (6) + Audio files (6) + Settings (6) + Advanced (8) = 32
-    speakers_data = {}
-    audio_data = {}
-
-    for i in range(6):
-        speakers_data[f"speaker{i + 1}_name"] = args[i]
-
-    # Server audio paths - these are the actual selected server files
-    for i in range(6):
-        server_audio_path = args[i + 6]
-        if server_audio_path:  # Only save if a server audio is selected
-            audio_data[f"speaker{i + 1}_audio"] = server_audio_path
-
-    # Skip the uploaded audio files (args[12:18]) as we don't save those paths
-
-    # Settings start at index 18 (6 names + 6 server audio + 6 uploaded audio)
-    interval = args[18]
-    gen_subtitle = args[19]
-    model_choice = args[20]
-    subtitle_lang = args[21]
-    bgm_volume = args[22]
-    bgm_loop = args[23]
-
-    # Advanced params start at index 24
-    advanced_params = list(args[24:32])
-
-    preset_data = collect_preset_data(
-        speakers_data,
-        interval,
-        gen_subtitle,
-        model_choice,
-        subtitle_lang,
-        bgm_volume,
-        bgm_loop,
-        advanced_params,
-        audio_data,
-    )
-
-    success = preset_manager.save_preset(preset_name, preset_data)
-
-    if success:
-        message = f"✅ 预设 '{preset_name}' 保存成功"
-    else:
-        message = f"❌ 保存预设 '{preset_name}' 失败"
-
-    return gr.update(value=message), refresh_preset_list()
-
-
-def delete_preset_handler(preset_name):
-    """Handle deleting a preset"""
-    if not preset_name:
-        return gr.update(value="❌ 请选择要删除的预设"), refresh_preset_list()
-
-    success = preset_manager.delete_preset(preset_name)
-
-    if success:
-        message = f"✅ 预设 '{preset_name}' 删除成功"
-    else:
-        message = f"❌ 删除预设 '{preset_name}' 失败"
-
-    return gr.update(value=message), refresh_preset_list()
+    return gr.update(value=output_path, visible=True), gr.update(value=subtitle_path, visible=bool(subtitle_path))

@@ -7,10 +7,12 @@ import os
 
 import gradio as gr
 
+from webui2.audio.subtitle_generator import SubtitleManager
+
 from ...config import SAMPLES_DIR
 
 
-def create_subtitle_only_tab_page():
+def create_subtitle_only_tab_page(subtitle_manager: SubtitleManager):
     """Create the subtitle-only generation tab"""
     gr.Markdown("上传音频文件，然后选择模型和语言来生成字幕文件。")
 
@@ -47,9 +49,7 @@ def create_subtitle_only_tab_page():
             status_message = gr.Textbox(label="状态", interactive=False)
 
         with gr.Column():
-            output_subtitle = gr.File(
-                label="生成的字幕文件", visible=True, interactive=False
-            )
+            output_subtitle = gr.File(label="生成的字幕文件", visible=True, interactive=False)
 
     # Add examples if available
     if sample_examples:
@@ -64,6 +64,19 @@ def create_subtitle_only_tab_page():
         )
     else:
         gr.Markdown("> 提示：您可以在 `samples` 目录中添加音频文件作为示例")
+
+    gen_subtitle_button.click(
+        fn=subtitle_manager.generate_subtitle_only,
+        inputs=[
+            input_audio_subtitle,
+            model_choice_subtitle,
+            subtitle_lang_subtitle,
+        ],
+        outputs=[
+            output_subtitle,
+            status_message,
+        ],
+    )
 
     return {
         "inputs": {

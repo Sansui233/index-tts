@@ -13,7 +13,7 @@ from webui2.ui.components.common import (
     create_bgm_accordion,
     create_subtitle_controls,
 )
-from webui2.ui.handlers import gen_audio, on_input_text_change, update_prompt_audio
+from webui2.ui.handlers.common import gen_audio
 
 
 def create_single_audio_tab_page(tts_manager: TTSManager, subtitle_manager: SubtitleManager):
@@ -119,7 +119,7 @@ def create_single_audio_tab_page(tts_manager: TTSManager, subtitle_manager: Subt
         outputs=[sentences_preview],
     )
     prompt_audio.upload(
-        fn=update_prompt_audio,
+        fn=gr.update,
         inputs=[],
         outputs=[gen_button],
     )
@@ -149,3 +149,19 @@ def create_single_audio_tab_page(tts_manager: TTSManager, subtitle_manager: Subt
         "advanced_params": advanced_params,
         "sentences_preview": sentences_preview,
     }
+
+
+def on_input_text_change(tts, text: str, max_tokens_per_sentence: str):
+    """Handle input text change for sentence preview"""
+    if text and len(text) > 0:
+        text_tokens_list = tts.tokenizer.tokenize(text)
+        sentences = tts.tokenizer.split_sentences(text_tokens_list, max_tokens_per_sentence=int(max_tokens_per_sentence))
+        data = []
+        for i, s in enumerate(sentences):
+            sentence_str = "".join(s)
+            tokens_count = len(s)
+            data.append([i, sentence_str, tokens_count])
+
+        return gr.update(value=data, visible=True, type="array")
+    else:
+        return gr.update(value=[])

@@ -6,7 +6,13 @@ import os
 
 import gradio as gr
 
-from webui2.ui.components.multi_dialog_presets import create_multi_dialog_presets
+from webui2.ui.components.multi_dialog_presets import (
+    create_multi_dialog_presets,
+    on_delete_preset_click,
+    on_refresh_preset_list,
+    on_save_preset_click,
+)
+from webui2.utils import preset_manager
 
 from ..components.common import (
     create_advanced_params_accordion,
@@ -14,13 +20,10 @@ from ..components.common import (
     create_subtitle_controls,
 )
 from ..components.multi_dialog_role import create_role
-from ..handlers import (
-    delete_preset_handler,
+from ..handlers.common import (
     gen_multi_dialog_audio,
-    load_preset_handler,
-    refresh_preset_list,
-    save_preset_handler,
 )
+from ..handlers.preset import load_preset_handler
 
 
 def create_multi_dialog_tab_page(tts_manager):
@@ -165,7 +168,7 @@ def create_multi_dialog_tab_page(tts_manager):
 
     # Save preset
     save_preset_btn.click(
-        fn=save_preset_handler,
+        fn=on_save_preset_click,
         inputs=[
             preset_name_input,
             # Speaker names
@@ -211,7 +214,7 @@ def create_multi_dialog_tab_page(tts_manager):
 
     # Delete preset
     delete_preset_btn.click(
-        fn=delete_preset_handler,
+        fn=on_delete_preset_click,
         inputs=[preset_dropdown],
         outputs=[preset_status, preset_dropdown],
     )
@@ -307,5 +310,5 @@ def create_multi_dialog_tab_page(tts_manager):
             "preset_status": preset_status,
         },
         "advanced_params": advanced_params,
-        "init_presets": refresh_preset_list,
+        "init_presets": on_refresh_preset_list,
     }
