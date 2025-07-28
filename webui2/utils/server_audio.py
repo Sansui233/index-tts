@@ -4,6 +4,7 @@ Server audio file management utilities
 
 import glob
 import os
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 
@@ -14,17 +15,30 @@ class ServerAudioManager:
         if base_audio_dirs is None:
             base_audio_dirs = [
                 "samples",
-                "samples/语音样本",
-                "samples/卡维",
-                "samples/流浪者",
-                "samples/艾尔海森",
                 "prompts",
             ]
-        self.base_audio_dirs = base_audio_dirs
+
+        # 增加一级子目录
+        audio_dirs = []
+        for base_dir in base_audio_dirs:
+            audio_dirs.append(base_dir)  # 先加上自己
+            try:
+                for name in os.listdir(base_dir):
+                    full_path = os.path.join(base_dir, name)
+                    if os.path.isdir(full_path):
+                        audio_dirs.append(full_path)
+            except FileNotFoundError:
+                print(f"目录不存在: {base_dir}")
+                continue
+
+        self.base_audio_dirs = audio_dirs
         self.supported_formats = [".wav", ".WAV", ".mp3", ".flac", ".m4a"]
 
     def get_server_audio_list(self) -> Dict[str, List[str]]:
-        """Get categorized list of server audio files"""
+        """Get categorized list of server audio files
+        return: Dict<category_name, display_files>
+        category_name: 一级目录名 | "通用样本"
+        """
         audio_files = {}
 
         for base_dir in self.base_audio_dirs:
@@ -41,10 +55,9 @@ class ServerAudioManager:
 
             # Get all audio files in this directory
             for ext in self.supported_formats:
-                pattern = os.path.join(base_dir, f"*{ext}")
-                found_files = glob.glob(pattern)
+                pattern = Path(base_dir).glob(f"*{ext}")
+                found_files = [str(p.as_posix()) for p in pattern]
                 files.extend(found_files)
-
             if files:
                 # Convert to relative paths for display, but keep full paths for loading
                 display_files = []

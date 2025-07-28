@@ -12,6 +12,13 @@ from tools.i18n.i18n import I18nAuto
 class TTSManager:
     """TTS Engine manager with caching and configuration"""
 
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if cls._instance is None:
+            cls._instance = super(TTSManager, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self, model_dir, cfg_path):
         self.model_dir = model_dir
         self.cfg_path = cfg_path

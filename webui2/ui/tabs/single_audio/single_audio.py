@@ -6,17 +6,18 @@ import os
 
 import gradio as gr
 
-from webui2.audio.subtitle_generator import SubtitleManager
-from webui2.audio.tts_engine import TTSManager
-from webui2.ui.components.common import (
+from webui2.ui.common import (
     create_advanced_params_accordion,
     create_bgm_accordion,
     create_subtitle_controls,
 )
 from webui2.ui.handlers.generate import gen_audio
+from webui2.utils import SubtitleManager, TTSManager
 
 
-def create_single_audio_tab_page(tts_manager: TTSManager, subtitle_manager: SubtitleManager):
+def create_single_audio_tab_page(
+    tts_manager: TTSManager, subtitle_manager: SubtitleManager
+):
     """Create the single audio generation tab"""
     with gr.Row(elem_id="single-audio"):
         # navigation section
@@ -42,7 +43,9 @@ def create_single_audio_tab_page(tts_manager: TTSManager, subtitle_manager: Subt
                         label="文本",
                         key="input_text_single",
                         placeholder="请输入目标文本",
-                        info="当前模型版本{}".format(getattr(tts_manager.get_tts(), "model_version", "1.0")),
+                        info="当前模型版本{}".format(
+                            getattr(tts_manager.get_tts(), "model_version", "1.0")
+                        ),
                     )
                     infer_mode = gr.Radio(
                         choices=["普通推理", "批次推理"],
@@ -59,7 +62,9 @@ def create_single_audio_tab_page(tts_manager: TTSManager, subtitle_manager: Subt
                     key="output_audio",
                     elem_id="output-audio",
                 )
-                subtitle_output = gr.File(label="字幕", visible=True, elem_id="output-subtitle")
+                subtitle_output = gr.File(
+                    label="字幕", visible=True, elem_id="output-subtitle"
+                )
                 gen_button = gr.Button(
                     "生成语音",
                     key="gen_button",
@@ -114,7 +119,9 @@ def create_single_audio_tab_page(tts_manager: TTSManager, subtitle_manager: Subt
         outputs=[output_audio, subtitle_output],
     )
     max_text_tokens_per_sentence.change(
-        fn=lambda text, max_tokens: on_input_text_change(tts_manager.get_tts(), text, max_tokens),
+        fn=lambda text, max_tokens: on_input_text_change(
+            tts_manager.get_tts(), text, max_tokens
+        ),
         inputs=[input_text_single, max_text_tokens_per_sentence],
         outputs=[sentences_preview],
     )
@@ -124,38 +131,16 @@ def create_single_audio_tab_page(tts_manager: TTSManager, subtitle_manager: Subt
         outputs=[gen_button],
     )
 
-    return {
-        "inputs": {
-            "prompt_audio": prompt_audio,
-            "input_text_single": input_text_single,
-            "infer_mode": infer_mode,
-            "max_text_tokens_per_sentence": max_text_tokens_per_sentence,
-            "sentences_bucket_max_size": sentences_bucket_max_size,
-            "gen_subtitle": gen_subtitle,
-            "subtitle_model": subtitle_model,
-            "subtitle_model": subtitle_lang,
-            "bgm_upload": bgm_upload,
-            "bgm_volume": bgm_volume,
-            "bgm_loop": bgm_loop,
-            "additional_bgm": additional_bgm,
-        },
-        "outputs": {
-            "output_audio": output_audio,
-            "subtitle_output": subtitle_output,
-        },
-        "controls": {
-            "gen_button": gen_button,
-        },
-        "advanced_params": advanced_params,
-        "sentences_preview": sentences_preview,
-    }
+    return
 
 
 def on_input_text_change(tts, text: str, max_tokens_per_sentence: str):
     """Handle input text change for sentence preview"""
     if text and len(text) > 0:
         text_tokens_list = tts.tokenizer.tokenize(text)
-        sentences = tts.tokenizer.split_sentences(text_tokens_list, max_tokens_per_sentence=int(max_tokens_per_sentence))
+        sentences = tts.tokenizer.split_sentences(
+            text_tokens_list, max_tokens_per_sentence=int(max_tokens_per_sentence)
+        )
         data = []
         for i, s in enumerate(sentences):
             sentence_str = "".join(s)

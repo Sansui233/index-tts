@@ -1,7 +1,3 @@
-"""
-Event handlers for UI interactions
-"""
-
 import os
 import time
 
@@ -9,7 +5,8 @@ import gradio as gr
 import numpy as np
 from scipy.io import wavfile
 
-from ...audio import mix_audio_with_bgm
+from indextts.infer import IndexTTS
+from webui2.utils import mix_audio_with_bgm
 
 
 def gen_audio(
@@ -98,34 +95,29 @@ def gen_audio(
     return gr.update(value=output_path, visible=True), gr.update(value=subtitle_path, visible=bool(subtitle_path))
 
 
+# 前面带类型标注的是需要自定义的参数
+# 后面 gradio 的组件
+# 使用时需要 lambda 函数来传递前面的参数，只留组件接口
 def gen_multi_dialog_audio(
-    tts,
+    tts: IndexTTS | None,
     subtitle_manager,
-    speaker1_name,
-    speaker1_audio,
-    speaker2_name,
-    speaker2_audio,
-    speaker3_name,
-    speaker3_audio,
-    speaker4_name,
-    speaker4_audio,
-    speaker5_name,
-    speaker5_audio,
-    speaker6_name,
-    speaker6_audio,
+    speaker_count: int,  # 指定 *args 中的 speaker 数量
     dialog_text,
     interval=0.5,
-    *args,
+    *args,  # 包含advanced parameters 和 speaker 列表(名字、音频)
     progress=gr.Progress(),
 ):
     """Handle multi-dialog generation"""
     temp_dir = "temp_dialog"
     os.makedirs(temp_dir, exist_ok=True)
 
-    tts.gr_progress = progress
+    if tts is None:
+        gr.Error("TTS model is not initialized")
+        return
+    tts.gr_progress = progress  # type: ignore
 
     # Get advanced parameters
-    if len(args) >= 8:
+    if len(args) >= 8 + speaker_count * 3:
         (
             do_sample,
             top_p,
@@ -158,20 +150,10 @@ def gen_multi_dialog_audio(
         "max_mel_tokens": int(max_mel_tokens),
     }
 
-    # Build speakers dictionary
-    speakers = {}
-    if speaker1_name and speaker1_audio:
-        speakers[speaker1_name] = speaker1_audio
-    if speaker2_name and speaker2_audio:
-        speakers[speaker2_name] = speaker2_audio
-    if speaker3_name and speaker3_audio:
-        speakers[speaker3_name] = speaker3_audio
-    if speaker4_name and speaker4_audio:
-        speakers[speaker4_name] = speaker4_audio
-    if speaker5_name and speaker5_audio:
-        speakers[speaker5_name] = speaker5_audio
-    if speaker6_name and speaker6_audio:
-        speakers[speaker6_name] = speaker6_audio
+    # Parse speaker inputs into Dicy<name, audio_name, audio_blob>
+    speaker_in_param = args[-speaker_count * 3 :] if len(args) >= speaker_count * 3 else []
+    speaker_pairs = np.array(speaker_in_param).reshape(speaker_count, 3)
+    speakers = {name: audio for name, audio in speaker_pairs}
 
     # Parse dialog text
     progress(0.1, "正在解析对话文本...")
@@ -217,6 +199,7 @@ def gen_multi_dialog_audio(
     audio_segments = []
     sr = None
 
+    # TODO batch 合成
     for i, line in enumerate(dialog_lines):
         speaker = line["speaker"]
         text = line["text"]

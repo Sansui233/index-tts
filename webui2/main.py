@@ -11,8 +11,6 @@ from threading import Timer
 
 import gradio as gr
 
-from webui2.audio import SubtitleManager, TTSManager
-
 # Setup environment and imports
 from webui2.config import (
     parse_arguments,
@@ -21,12 +19,9 @@ from webui2.config import (
     setup_python_path,
     validate_model_files,
 )
-from webui2.ui.components.common import create_header
-from webui2.ui.handlers.generate import (
-    gen_multi_dialog_audio,
-)
+from webui2.ui.common import create_header
 from webui2.ui.tabs import *
-from webui2.utils import install_required_packages
+from webui2.utils import SubtitleManager, TTSManager
 
 # Initialize environment
 set_ffmpeg_path()
@@ -36,8 +31,6 @@ setup_python_path()
 warnings.filterwarnings("ignore", category=FutureWarning)
 warnings.filterwarnings("ignore", category=UserWarning)
 
-# Install required packages
-install_required_packages()
 
 # Parse arguments and validate setup
 cmd_args = parse_arguments()
@@ -45,24 +38,28 @@ validate_model_files(cmd_args.model_dir)
 setup_directories()
 
 # Initialize managers
-tts_manager = TTSManager(cmd_args.model_dir, os.path.join(cmd_args.model_dir, "config.yaml"))
-subtitle_manager = SubtitleManager()
-
-# read styles.css as string as it is used in the create_webui function
-with open(os.path.join("webui2", "ui", "styles", "style.css"), "r", encoding="utf-8") as f:
-    styles_css = f.read()
+tts_mgr = TTSManager(
+    cmd_args.model_dir, os.path.join(cmd_args.model_dir, "config.yaml")
+)
+subtitle_mgr = SubtitleManager()
 
 
 def create_webui():
     """Create the main web UI"""
-    with gr.Blocks(title="IndexTTS Demo", css=styles_css) as demo:
+    with gr.Blocks(
+        title="IndexTTS Demo",
+        css_paths=os.path.join("webui2", "ui", "styles", "style.css"),
+    ) as demo:
         create_header()
         with gr.Tab("音频生成"):
-            create_single_audio_tab_page(tts_manager, subtitle_manager)
+            create_single_audio_tab_page(tts_mgr, subtitle_mgr)
         with gr.Tab("多人对话"):
-            create_multi_dialog_tab_page(tts_manager)
+            create_multi_dialog_tab_page(tts_mgr, subtitle_mgr)
         with gr.Tab("单独生成字幕"):
-            create_subtitle_only_tab_page(subtitle_manager)
+            create_subtitle_only_tab_page(subtitle_mgr)
+
+        # Gradio 这版本有 bug，首页不渲染个 Textbox 导致后面的 Textbox 渲染不出来
+        gr.Textbox(label="444", visible=True, lines=1, elem_classes="display-none")
 
     return demo
 

@@ -23,3 +23,6 @@ tqdm
 
 WeTextProcessing; platform_machine != "Darwin"
 wetext; platform_system == "Darwin"
+
+# webui2
+opencc

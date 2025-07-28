@@ -17,22 +17,14 @@ sys.path.append(os.path.join(current_dir, "indextts"))
 import argparse
 
 parser = argparse.ArgumentParser(description="IndexTTS WebUI")
-parser.add_argument(
-    "--verbose", action="store_true", default=False, help="Enable verbose mode"
-)
+parser.add_argument("--verbose", action="store_true", default=False, help="Enable verbose mode")
 parser.add_argument("--port", type=int, default=7860, help="Port to run the web UI on")
-parser.add_argument(
-    "--host", type=str, default="127.0.0.1", help="Host to run the web UI on"
-)
-parser.add_argument(
-    "--model_dir", type=str, default="checkpoints", help="Model checkpoints directory"
-)
+parser.add_argument("--host", type=str, default="127.0.0.1", help="Host to run the web UI on")
+parser.add_argument("--model_dir", type=str, default="checkpoints", help="Model checkpoints directory")
 cmd_args = parser.parse_args()
 
 if not os.path.exists(cmd_args.model_dir):
-    print(
-        f"Model directory {cmd_args.model_dir} does not exist. Please download the model first."
-    )
+    print(f"Model directory {cmd_args.model_dir} does not exist. Please download the model first.")
     sys.exit(1)
 
 for file in [
@@ -91,7 +83,7 @@ def gen_single(
     if not output_path:
         output_path = os.path.join("outputs", f"spk_{int(time.time())}.wav")
     # set gradio progress
-    tts.gr_progress = progress
+    tts.gr_progress = progress  # type: ignore
     (
         do_sample,
         top_p,
@@ -186,9 +178,7 @@ with gr.Blocks(title="IndexTTS Demo") as demo:
                         "**GPT2 采样设置** _参数会影响音频多样性和生成速度详见[Generation strategies](https://huggingface.co/docs/transformers/main/en/generation_strategies)_"
                     )
                     with gr.Row():
-                        do_sample = gr.Checkbox(
-                            label="do_sample", value=True, info="是否进行采样"
-                        )
+                        do_sample = gr.Checkbox(label="do_sample", value=True, info="是否进行采样")
                         temperature = gr.Slider(
                             label="temperature",
                             minimum=0.1,
@@ -204,12 +194,8 @@ with gr.Blocks(title="IndexTTS Demo") as demo:
                             value=0.8,
                             step=0.01,
                         )
-                        top_k = gr.Slider(
-                            label="top_k", minimum=0, maximum=100, value=30, step=1
-                        )
-                        num_beams = gr.Slider(
-                            label="num_beams", value=3, minimum=1, maximum=10, step=1
-                        )
+                        top_k = gr.Slider(label="top_k", minimum=0, maximum=100, value=30, step=1)
+                        num_beams = gr.Slider(label="num_beams", value=3, minimum=1, maximum=10, step=1)
                     with gr.Row():
                         repetition_penalty = gr.Number(
                             label="repetition_penalty",
@@ -288,9 +274,7 @@ with gr.Blocks(title="IndexTTS Demo") as demo:
         if text and len(text) > 0:
             text_tokens_list = tts.tokenizer.tokenize(text)
 
-            sentences = tts.tokenizer.split_sentences(
-                text_tokens_list, max_tokens_per_sentence=int(max_tokens_per_sentence)
-            )
+            sentences = tts.tokenizer.split_sentences(text_tokens_list, max_tokens_per_sentence=int(max_tokens_per_sentence))
             data = []
             for i, s in enumerate(sentences):
                 sentence_str = "".join(s)
