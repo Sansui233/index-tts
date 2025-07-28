@@ -18,7 +18,7 @@ class SubtitleManager:
     def generate_subtitles(
         self,
         audio_path,
-        model_choice="base",
+        subtitle_model="base",
         subtitle_lang="zh (中文)",
         output_srt=None,
     ):
@@ -34,11 +34,9 @@ class SubtitleManager:
                 base_name = os.path.splitext(os.path.basename(audio_path))[0]
                 output_srt = os.path.join("outputs", f"{base_name}.srt")
 
-            self.generator.set_model(model_choice)
+            self.generator.set_model(subtitle_model)
 
-            generated_subtitle = self.generator.generate_subtitles(
-                audio_path, language=lang_code, output_srt=output_srt
-            )
+            generated_subtitle = self.generator.generate_subtitles(audio_path, language=lang_code, output_srt=output_srt)
 
             if generated_subtitle and os.path.exists(generated_subtitle):
                 print(f"字幕文件已生成: {generated_subtitle}")
@@ -54,7 +52,7 @@ class SubtitleManager:
         finally:
             self.generator.cleanup()
 
-    def generate_subtitle_only(self, audio_path, model_choice, subtitle_lang):
+    def generate_subtitle_only(self, audio_path, subtitle_model, subtitle_lang):
         """单独生成字幕文件"""
         try:
             if audio_path is None:
@@ -64,9 +62,7 @@ class SubtitleManager:
                 return None, "音频文件无效或为空"
 
             try:
-                result = self.generate_subtitles(
-                    audio_path, model_choice, subtitle_lang
-                )
+                result = self.generate_subtitles(audio_path, subtitle_model, subtitle_lang)
                 if result:
                     return result, "字幕生成成功！"
                 else:

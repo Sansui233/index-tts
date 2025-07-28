@@ -95,7 +95,7 @@ def create_multi_dialog_tab_page(tts_manager):
                     elem_classes=["flex-auto", "bg-accent"],
                 )
 
-            gen_subtitle_multi, model_choice_multi, subtitle_lang_multi = create_subtitle_controls()
+            gen_subtitle_multi, subtitle_model_multi, subtitle_lang_multi = create_subtitle_controls()
 
             bgm_upload_multi, bgm_volume_multi, bgm_loop_multi, additional_bgm_multi = create_bgm_accordion()
 
@@ -150,7 +150,7 @@ def create_multi_dialog_tab_page(tts_manager):
             # Settings
             interval,
             gen_subtitle_multi,
-            model_choice_multi,
+            subtitle_model_multi,
             subtitle_lang_multi,
             bgm_volume_multi,
             bgm_loop_multi,
@@ -195,7 +195,7 @@ def create_multi_dialog_tab_page(tts_manager):
             # Settings
             interval,
             gen_subtitle_multi,
-            model_choice_multi,
+            subtitle_model_multi,
             subtitle_lang_multi,
             bgm_volume_multi,
             bgm_loop_multi,
@@ -252,7 +252,7 @@ def create_multi_dialog_tab_page(tts_manager):
             repetition_penalty,
             max_mel_tokens,
             gen_subtitle_multi,
-            model_choice_multi,
+            subtitle_model_multi,
             subtitle_lang_multi,
             bgm_upload_multi,
             bgm_volume_multi,
@@ -286,7 +286,7 @@ def create_multi_dialog_tab_page(tts_manager):
             "dialog_text": dialog_text,
             "interval": interval,
             "gen_subtitle_multi": gen_subtitle_multi,
-            "model_choice_multi": model_choice_multi,
+            "subtitle_model_multi": subtitle_model_multi,
             "subtitle_lang_multi": subtitle_lang_multi,
             "bgm_upload_multi": bgm_upload_multi,
             "bgm_volume_multi": bgm_volume_multi,

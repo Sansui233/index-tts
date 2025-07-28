@@ -27,19 +27,19 @@ def create_subtitle_only_tab_page(subtitle_manager: SubtitleManager):
 
     with gr.Row():
         with gr.Column():
-            input_audio_subtitle = gr.Audio(
+            audio = gr.Audio(
                 label="上传音频文件",
                 type="filepath",
                 sources=["upload", "microphone"],
             )
 
             with gr.Row():
-                model_choice_subtitle = gr.Dropdown(
+                subtitle_model = gr.Dropdown(
                     choices=["tiny", "base", "small", "medium"],
                     value="base",
                     label="字幕模型",
                 )
-                subtitle_lang_subtitle = gr.Dropdown(
+                lang = gr.Dropdown(
                     choices=["zh (中文)", "en (英文)", "ja (日语)", "ko (韩语)"],
                     value="zh (中文)",
                     label="字幕语言",
@@ -56,9 +56,9 @@ def create_subtitle_only_tab_page(subtitle_manager: SubtitleManager):
         gr.Examples(
             examples=sample_examples,
             inputs=[
-                input_audio_subtitle,
-                model_choice_subtitle,
-                subtitle_lang_subtitle,
+                audio,
+                subtitle_model,
+                lang,
             ],
             label="示例文件",
         )
@@ -68,9 +68,9 @@ def create_subtitle_only_tab_page(subtitle_manager: SubtitleManager):
     gen_subtitle_button.click(
         fn=subtitle_manager.generate_subtitle_only,
         inputs=[
-            input_audio_subtitle,
-            model_choice_subtitle,
-            subtitle_lang_subtitle,
+            audio,
+            subtitle_model,
+            lang,
         ],
         outputs=[
             output_subtitle,
@@ -80,9 +80,9 @@ def create_subtitle_only_tab_page(subtitle_manager: SubtitleManager):
 
     return {
         "inputs": {
-            "input_audio_subtitle": input_audio_subtitle,
-            "model_choice_subtitle": model_choice_subtitle,
-            "subtitle_lang_subtitle": subtitle_lang_subtitle,
+            "input_audio_subtitle": audio,
+            "subtitle_model_subtitle": subtitle_model,
+            "subtitle_lang_subtitle": lang,
         },
         "outputs": {
             "output_subtitle": output_subtitle,

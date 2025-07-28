@@ -11,7 +11,7 @@ def collect_preset_data(
     speakers_data: Dict,
     interval: float,
     gen_subtitle: bool,
-    model_choice: str,
+    subtitle_model: str,
     subtitle_lang: str,
     bgm_volume: float,
     bgm_loop: bool,
@@ -24,7 +24,7 @@ def collect_preset_data(
         "settings": {
             "interval": interval,
             "gen_subtitle": gen_subtitle,
-            "model_choice": model_choice,
+            "subtitle_model": subtitle_model,
             "subtitle_lang": subtitle_lang,
             "bgm_volume": bgm_volume,
             "bgm_loop": bgm_loop,
@@ -93,7 +93,7 @@ def apply_preset_data(preset_data: Dict[str, Any]) -> Dict[str, Any]:
     settings_mapping = {
         "interval": "interval",
         "gen_subtitle": "gen_subtitle_multi",
-        "model_choice": "model_choice_multi",
+        "subtitle_model": "subtitle_model_multi",
         "subtitle_lang": "subtitle_lang_multi",
         "bgm_volume": "bgm_volume_multi",
         "bgm_loop": "bgm_loop_multi",
@@ -149,7 +149,7 @@ def load_preset_handler(preset_name):
     # Settings (6)
     result.append(gr.update(value=updates.get("interval", 0.5)))
     result.append(gr.update(value=updates.get("gen_subtitle_multi", True)))
-    result.append(gr.update(value=updates.get("model_choice_multi", "whisper-base")))
+    result.append(gr.update(value=updates.get("subtitle_model_multi", "base")))
     result.append(gr.update(value=updates.get("subtitle_lang_multi", "zh")))
     result.append(gr.update(value=updates.get("bgm_volume_multi", 0.3)))
     result.append(gr.update(value=updates.get("bgm_loop_multi", True)))

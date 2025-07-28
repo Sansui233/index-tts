@@ -78,7 +78,7 @@ def on_save_preset_click(preset_name, *args):
     # Settings start at index 18 (6 names + 6 server audio + 6 uploaded audio)
     interval = args[18]
     gen_subtitle = args[19]
-    model_choice = args[20]
+    subtitle_model = args[20]
     subtitle_lang = args[21]
     bgm_volume = args[22]
     bgm_loop = args[23]
@@ -90,7 +90,7 @@ def on_save_preset_click(preset_name, *args):
         speakers_data,
         interval,
         gen_subtitle,
-        model_choice,
+        subtitle_model,
         subtitle_lang,
         bgm_volume,
         bgm_loop,
