@@ -15,74 +15,99 @@ from ..components import (
 
 def create_single_audio_tab(tts_manager):
     """Create the single audio generation tab"""
-    with gr.Row():
-        os.makedirs("prompts", exist_ok=True)
-        prompt_audio = gr.Audio(
-            label="参考音频",
-            key="prompt_audio",
-            sources=["upload", "microphone"],
-            type="filepath",
-        )
+    with gr.Row(elem_id="single-audio"):
+        # navigation section
+        with gr.Column(elem_id="sidebar-anchors", scale=1):
+            gr.HTML('<a href="#single-audio-config-basic"><h3">🧑 基本配置<h3></a>')
+            gr.HTML('<a href="#subtitle-controls"><h3">🎬 字幕<h3></a>')
+            gr.HTML('<a href="#bgm-accordion""><h3">🎵 背景音乐<h3></a>')
+            gr.HTML('<a href="#advanced-params""><h3">⚙️ 高级参数<h3></a>')
+            gr.HTML('<a href="#anchor-examples"><h3">📝 示例<h3></a>')
 
-        with gr.Column():
-            input_text_single = gr.TextArea(
-                label="文本",
-                key="input_text_single",
-                placeholder="请输入目标文本",
-                info="当前模型版本{}".format(
-                    tts_manager.get_tts().model_version or "1.0"
-                ),
-            )
-            infer_mode = gr.Radio(
-                choices=["普通推理", "批次推理"],
-                label="推理模式",
-                info="批次推理：更适合长句，性能翻倍",
-                value="普通推理",
-            )
-            gen_button = gr.Button("生成语音", key="gen_button", interactive=True)
+        with gr.Column(scale=9):
+            with gr.Row(elem_id="single-audio-config-basic"):
+                os.makedirs("prompts", exist_ok=True)
+                prompt_audio = gr.Audio(
+                    label="参考音频",
+                    key="prompt_audio",
+                    sources=["upload", "microphone"],
+                    type="filepath",
+                )
 
-        output_audio = gr.Audio(label="生成结果", visible=True, key="output_audio")
+                with gr.Column():
+                    input_text_single = gr.TextArea(
+                        label="文本",
+                        key="input_text_single",
+                        placeholder="请输入目标文本",
+                        info="当前模型版本{}".format(
+                            tts_manager.get_tts().model_version or "1.0"
+                        ),
+                    )
+                    infer_mode = gr.Radio(
+                        choices=["普通推理", "批次推理"],
+                        label="推理模式",
+                        info="批次推理：更适合长句，性能翻倍",
+                        value="普通推理",
+                    )
 
-    gen_subtitle, model_choice, subtitle_lang = create_subtitle_controls()
-    subtitle_output = gr.File(label="字幕文件", visible=True)
+            with gr.Row(elem_id="single-audio-output"):
+                gr.Markdown("### 生成结果", elem_classes=["flex-auto"])
+                output_audio = gr.Audio(
+                    label="语音",
+                    visible=True,
+                    key="output_audio",
+                    elem_id="output-audio",
+                )
+                subtitle_output = gr.File(
+                    label="字幕", visible=True, elem_id="output-subtitle"
+                )
+                gen_button = gr.Button(
+                    "生成语音",
+                    key="gen_button",
+                    interactive=True,
+                    elem_classes=["flex-auto", "bg-accent"],
+                )
 
-    bgm_upload, bgm_volume, bgm_loop, additional_bgm = create_bgm_accordion()
+            gen_subtitle, model_choice, subtitle_lang = create_subtitle_controls()
 
-    advanced_components = create_advanced_params_accordion(tts_manager)
+            bgm_upload, bgm_volume, bgm_loop, additional_bgm = create_bgm_accordion()
 
-    # Extract components for return
-    (
-        do_sample,
-        top_p,
-        top_k,
-        temperature,
-        length_penalty,
-        num_beams,
-        repetition_penalty,
-        max_mel_tokens,
-        max_text_tokens_per_sentence,
-        sentences_bucket_max_size,
-        sentences_preview,
-    ) = advanced_components
+            advanced_components = create_advanced_params_accordion(tts_manager)
 
-    advanced_params = [
-        do_sample,
-        top_p,
-        top_k,
-        temperature,
-        length_penalty,
-        num_beams,
-        repetition_penalty,
-        max_mel_tokens,
-    ]
+            # Extract components for return
+            (
+                do_sample,
+                top_p,
+                top_k,
+                temperature,
+                length_penalty,
+                num_beams,
+                repetition_penalty,
+                max_mel_tokens,
+                max_text_tokens_per_sentence,
+                sentences_bucket_max_size,
+                sentences_preview,
+            ) = advanced_components
 
-    # Add examples if available
-    examples = tts_manager.get_examples()
-    if examples:
-        gr.Examples(
-            examples=examples,
-            inputs=[prompt_audio, input_text_single, infer_mode],
-        )
+            advanced_params = [
+                do_sample,
+                top_p,
+                top_k,
+                temperature,
+                length_penalty,
+                num_beams,
+                repetition_penalty,
+                max_mel_tokens,
+            ]
+
+            # Add examples if available
+            examples = tts_manager.get_examples()
+            if examples:
+                gr.Examples(
+                    examples=examples,
+                    inputs=[prompt_audio, input_text_single, infer_mode],
+                    elem_id="anchor-examples",
+                )
 
     return {
         "inputs": {

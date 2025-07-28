@@ -57,12 +57,16 @@ tts_manager = TTSManager(
 )
 subtitle_manager = SubtitleManager()
 
+# read styles.css as string as it is used in the create_webui function
+with open(
+    os.path.join("webui2", "ui", "styles", "style.css"), "r", encoding="utf-8"
+) as f:
+    styles_css = f.read()
+
 
 def create_webui():
     """Create the main web UI"""
-    with gr.Blocks(title="IndexTTS Demo") as demo:
-        mutex = threading.Lock()
-
+    with gr.Blocks(title="IndexTTS Demo", css=styles_css) as demo:
         # Header
         create_header()
 
@@ -126,7 +130,7 @@ def create_webui():
             )
 
         # Multi-Dialog Tab
-        with gr.Tab("多人对话(读小说也行)"):
+        with gr.Tab("多人对话"):
             multi_dialog_components = create_multi_dialog_tab(tts_manager)
 
             # Set up event handlers for multi-dialog tab

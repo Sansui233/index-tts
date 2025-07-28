@@ -7,7 +7,7 @@ import gradio as gr
 
 def create_advanced_params_accordion(tts):
     """Create advanced parameters accordion"""
-    with gr.Accordion("高级生成参数设置", open=False):
+    with gr.Accordion("高级生成参数设置", open=True, elem_id="advanced-params"):
         with gr.Row():
             with gr.Column(scale=1):
                 gr.Markdown(
@@ -109,7 +109,7 @@ def create_advanced_params_accordion(tts):
 
 def create_bgm_accordion():
     """Create background music settings accordion"""
-    with gr.Accordion("背景音乐设置", open=False):
+    with gr.Accordion("背景音乐设置", open=True, elem_id="bgm-accordion"):
         bgm_upload = gr.Audio(label="背景音乐", sources=["upload"], type="filepath")
         bgm_volume = gr.Slider(
             label="背景音乐音量", minimum=0.0, maximum=1.0, value=0.3, step=0.01
@@ -124,8 +124,8 @@ def create_bgm_accordion():
 
 def create_subtitle_controls():
     """Create subtitle generation controls"""
-    with gr.Row():
-        gen_subtitle = gr.Checkbox(label="生成字幕文件", value=True)
+    with gr.Row(elem_id="subtitle-controls"):
+        gen_subtitle = gr.Checkbox(label="生成字幕文件", value=False)
         model_choice = gr.Dropdown(
             choices=["tiny", "base", "small", "medium"],
             value="base",
@@ -145,12 +145,6 @@ def create_header():
     return gr.HTML("""
     <h2><center>IndexTTS: An Industrial-Level Controllable and Efficient Zero-Shot Text-To-Speech System</h2>
     <h2><center>(一款工业级可控且高效的零样本文本转语音系统)</h2>
-    <h3 style="text-align: center; font-size: 22px; margin-top: 15px; margin-bottom: 15px;">
-        哔哩哔哩@不吃鸟的虫子  
-        <a href="https://b23.tv/7Y2BJkn" target="_blank" style="color: #00a1d6; text-decoration: underline;">
-            https://b23.tv/7Y2BJkn
-        </a>
-    </h3>
 <p align="center">
 <a href='https://arxiv.org/abs/2502.05512'><img src='https://img.shields.io/badge/ArXiv-2502.05512-red'></a>
 </p>

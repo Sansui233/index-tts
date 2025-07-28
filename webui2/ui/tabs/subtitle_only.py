@@ -1,15 +1,17 @@
 """
 Subtitle-only generation tab
 """
+
 import glob
 import os
+
 import gradio as gr
+
 from ...config import SAMPLES_DIR
 
 
 def create_subtitle_only_tab():
     """Create the subtitle-only generation tab"""
-    gr.Markdown("## 单独生成字幕")
     gr.Markdown("上传音频文件，然后选择模型和语言来生成字幕文件。")
 
     # Get sample files for examples
@@ -64,16 +66,16 @@ def create_subtitle_only_tab():
         gr.Markdown("> 提示：您可以在 `samples` 目录中添加音频文件作为示例")
 
     return {
-        'inputs': {
-            'input_audio_subtitle': input_audio_subtitle,
-            'model_choice_subtitle': model_choice_subtitle,
-            'subtitle_lang_subtitle': subtitle_lang_subtitle,
+        "inputs": {
+            "input_audio_subtitle": input_audio_subtitle,
+            "model_choice_subtitle": model_choice_subtitle,
+            "subtitle_lang_subtitle": subtitle_lang_subtitle,
         },
-        'outputs': {
-            'output_subtitle': output_subtitle,
-            'status_message': status_message,
+        "outputs": {
+            "output_subtitle": output_subtitle,
+            "status_message": status_message,
         },
-        'controls': {
-            'gen_subtitle_button': gen_subtitle_button,
+        "controls": {
+            "gen_subtitle_button": gen_subtitle_button,
         },
     }
