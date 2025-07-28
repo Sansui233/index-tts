@@ -20,7 +20,7 @@ from ..components.common import (
     create_subtitle_controls,
 )
 from ..components.multi_dialog_role import create_role
-from ..handlers.common import (
+from ..handlers.generate import (
     gen_multi_dialog_audio,
 )
 from ..handlers.preset import load_preset_handler

@@ -13,7 +13,7 @@ from webui2.ui.components.common import (
     create_bgm_accordion,
     create_subtitle_controls,
 )
-from webui2.ui.handlers.common import gen_audio
+from webui2.ui.handlers.generate import gen_audio
 
 
 def create_single_audio_tab_page(tts_manager: TTSManager, subtitle_manager: SubtitleManager):

@@ -22,7 +22,7 @@ from webui2.config import (
     validate_model_files,
 )
 from webui2.ui.components.common import create_header
-from webui2.ui.handlers.common import (
+from webui2.ui.handlers.generate import (
     gen_multi_dialog_audio,
 )
 from webui2.ui.tabs import *

@@ -253,7 +253,7 @@ def gen_multi_dialog_audio(
 
     # Handle additional parameters
     gen_subtitle = args[8] if len(args) > 8 else True
-    model_choice = args[9] if len(args) > 9 else "base"
+    subtitle_model = args[9] if len(args) > 9 else "base"
     subtitle_lang = args[10] if len(args) > 10 else "zh (中文)"
     bgm_path = args[11] if len(args) > 11 else None
     bgm_volume = args[12] if len(args) > 12 else 0.3
@@ -263,7 +263,7 @@ def gen_multi_dialog_audio(
     # Generate subtitle
     subtitle_path = None
     if gen_subtitle:
-        subtitle_path = subtitle_manager.generate_subtitles(output_path, model_choice, subtitle_lang)
+        subtitle_path = subtitle_manager.generate_subtitles(output_path, subtitle_model, subtitle_lang)
 
     # Mix with background music
     bgm_paths = []
