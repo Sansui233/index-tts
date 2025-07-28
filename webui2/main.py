@@ -5,13 +5,11 @@ Main entry point for the web interface
 """
 
 import os
-import threading
 import warnings
 import webbrowser
 from threading import Timer
 
 import gradio as gr
-import numpy as np
 
 from webui2.audio import SubtitleManager, TTSManager
 
@@ -23,16 +21,11 @@ from webui2.config import (
     setup_python_path,
     validate_model_files,
 )
-from webui2.ui import (
-    create_header,
-    create_multi_dialog_tab,
-    create_single_audio_tab,
-    create_subtitle_only_tab,
-    gen_multi_dialog,
-    gen_single,
-    on_input_text_change,
-    update_prompt_audio,
+from webui2.ui.components.common import create_header
+from webui2.ui.handlers import (
+    gen_multi_dialog_audio,
 )
+from webui2.ui.tabs import *
 from webui2.utils import install_required_packages
 
 # Initialize environment
@@ -52,15 +45,11 @@ validate_model_files(cmd_args.model_dir)
 setup_directories()
 
 # Initialize managers
-tts_manager = TTSManager(
-    cmd_args.model_dir, os.path.join(cmd_args.model_dir, "config.yaml")
-)
+tts_manager = TTSManager(cmd_args.model_dir, os.path.join(cmd_args.model_dir, "config.yaml"))
 subtitle_manager = SubtitleManager()
 
 # read styles.css as string as it is used in the create_webui function
-with open(
-    os.path.join("webui2", "ui", "styles", "style.css"), "r", encoding="utf-8"
-) as f:
+with open(os.path.join("webui2", "ui", "styles", "style.css"), "r", encoding="utf-8") as f:
     styles_css = f.read()
 
 
@@ -72,106 +61,15 @@ def create_webui():
 
         # Single Audio Tab
         with gr.Tab("音频生成"):
-            single_audio_components = create_single_audio_tab(tts_manager)
-
-            # Set up event handlers for single audio tab
-            single_audio_components["controls"]["gen_button"].click(
-                fn=lambda *args: gen_single(
-                    tts_manager.get_tts(), subtitle_manager, *args
-                ),
-                inputs=[
-                    single_audio_components["inputs"]["prompt_audio"],
-                    single_audio_components["inputs"]["input_text_single"],
-                    single_audio_components["inputs"]["infer_mode"],
-                    single_audio_components["inputs"]["max_text_tokens_per_sentence"],
-                    single_audio_components["inputs"]["sentences_bucket_max_size"],
-                    *single_audio_components["advanced_params"],
-                    single_audio_components["inputs"]["gen_subtitle"],
-                    single_audio_components["inputs"]["model_choice"],
-                    single_audio_components["inputs"]["subtitle_lang"],
-                    single_audio_components["inputs"]["bgm_upload"],
-                    single_audio_components["inputs"]["bgm_volume"],
-                    single_audio_components["inputs"]["bgm_loop"],
-                    single_audio_components["inputs"]["additional_bgm"],
-                ],
-                outputs=[
-                    single_audio_components["outputs"]["output_audio"],
-                    single_audio_components["outputs"]["subtitle_output"],
-                ],
-            )
-
-            # Text change handler for sentence preview
-            single_audio_components["inputs"]["input_text_single"].change(
-                lambda text, max_tokens: on_input_text_change(
-                    tts_manager.get_tts(), text, max_tokens
-                ),
-                inputs=[
-                    single_audio_components["inputs"]["input_text_single"],
-                    single_audio_components["inputs"]["max_text_tokens_per_sentence"],
-                ],
-                outputs=[single_audio_components["sentences_preview"]],
-            )
-
-            single_audio_components["inputs"]["max_text_tokens_per_sentence"].change(
-                lambda text, max_tokens: on_input_text_change(
-                    tts_manager.get_tts(), text, max_tokens
-                ),
-                inputs=[
-                    single_audio_components["inputs"]["input_text_single"],
-                    single_audio_components["inputs"]["max_text_tokens_per_sentence"],
-                ],
-                outputs=[single_audio_components["sentences_preview"]],
-            )
-
-            single_audio_components["inputs"]["prompt_audio"].upload(
-                update_prompt_audio,
-                inputs=[],
-                outputs=[single_audio_components["controls"]["gen_button"]],
-            )
+            create_single_audio_tab_page(tts_manager, subtitle_manager)
 
         # Multi-Dialog Tab
         with gr.Tab("多人对话"):
-            multi_dialog_components = create_multi_dialog_tab(tts_manager)
-
-            # Set up event handlers for multi-dialog tab
-            multi_dialog_components["controls"]["gen_button_multi"].click(
-                fn=lambda *args: gen_multi_dialog(
-                    tts_manager.get_tts(), subtitle_manager, *args
-                ),
-                inputs=[
-                    multi_dialog_components["inputs"]["speakers"]["speaker1_name"],
-                    multi_dialog_components["inputs"]["speakers"]["speaker1_audio"],
-                    multi_dialog_components["inputs"]["speakers"]["speaker2_name"],
-                    multi_dialog_components["inputs"]["speakers"]["speaker2_audio"],
-                    multi_dialog_components["inputs"]["speakers"]["speaker3_name"],
-                    multi_dialog_components["inputs"]["speakers"]["speaker3_audio"],
-                    multi_dialog_components["inputs"]["speakers"]["speaker4_name"],
-                    multi_dialog_components["inputs"]["speakers"]["speaker4_audio"],
-                    multi_dialog_components["inputs"]["speakers"]["speaker5_name"],
-                    multi_dialog_components["inputs"]["speakers"]["speaker5_audio"],
-                    multi_dialog_components["inputs"]["speakers"]["speaker6_name"],
-                    multi_dialog_components["inputs"]["speakers"]["speaker6_audio"],
-                    multi_dialog_components["inputs"]["dialog_text"],
-                    multi_dialog_components["inputs"]["interval"],
-                    # Advanced params from the tab
-                    *multi_dialog_components["advanced_params"],
-                    multi_dialog_components["inputs"]["gen_subtitle_multi"],
-                    multi_dialog_components["inputs"]["model_choice_multi"],
-                    multi_dialog_components["inputs"]["subtitle_lang_multi"],
-                    multi_dialog_components["inputs"]["bgm_upload_multi"],
-                    multi_dialog_components["inputs"]["bgm_volume_multi"],
-                    multi_dialog_components["inputs"]["bgm_loop_multi"],
-                    multi_dialog_components["inputs"]["additional_bgm_multi"],
-                ],
-                outputs=[
-                    multi_dialog_components["outputs"]["output_audio_multi"],
-                    multi_dialog_components["outputs"]["subtitle_output_multi"],
-                ],
-            )
+            create_multi_dialog_tab_page(tts_manager)
 
         # Subtitle-Only Tab
         with gr.Tab("单独生成字幕"):
-            subtitle_only_components = create_subtitle_only_tab()
+            subtitle_only_components = create_subtitle_only_tab_page()
 
             # Set up event handlers for subtitle-only tab
             subtitle_only_components["controls"]["gen_subtitle_button"].click(

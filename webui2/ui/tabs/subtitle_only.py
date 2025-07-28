@@ -10,7 +10,7 @@ import gradio as gr
 from ...config import SAMPLES_DIR
 
 
-def create_subtitle_only_tab():
+def create_subtitle_only_tab_page():
     """Create the subtitle-only generation tab"""
     gr.Markdown("上传音频文件，然后选择模型和语言来生成字幕文件。")
 

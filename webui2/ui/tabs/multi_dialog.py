@@ -2,16 +2,28 @@
 Multi-dialog generation tab
 """
 
+import os
+
 import gradio as gr
 
-from ..components import (
+from webui2.ui.components.multi_dialog_presets import create_multi_dialog_presets
+
+from ..components.common import (
     create_advanced_params_accordion,
     create_bgm_accordion,
     create_subtitle_controls,
 )
+from ..components.multi_dialog_role import create_role
+from ..handlers import (
+    delete_preset_handler,
+    gen_multi_dialog_audio,
+    load_preset_handler,
+    refresh_preset_list,
+    save_preset_handler,
+)
 
 
-def create_multi_dialog_tab(tts_manager):
+def create_multi_dialog_tab_page(tts_manager):
     """Create the multi-dialog generation tab"""
 
     with gr.Row(elem_id="multi-dialog"):
@@ -27,87 +39,26 @@ def create_multi_dialog_tab(tts_manager):
         # Speaker configuration rows
         with gr.Column(scale=9):
             gr.Markdown("请为每个角色上传参考音频，然后在下方输入对话内容")
+            (
+                preset_dropdown,
+                load_preset_btn,
+                refresh_preset_btn,
+                preset_name_input,
+                save_preset_btn,
+                delete_preset_btn,
+                preset_status,
+            ) = create_multi_dialog_presets()
+
+            # Status message for preset operations
             with gr.Row(elem_id="anchor-multi_dialog_roles"):
-                with gr.Row(elem_classes="multi_dialog-roles"):
-                    speaker1_name = gr.Textbox(
-                        label="角色名称",
-                        value="角色1",
-                        interactive=True,
-                        elem_classes=["multi_dialog-role_name"],
-                    )
-                    speaker1_audio = gr.Audio(
-                        label="参考音频",
-                        key="speaker1_audio",
-                        sources=["upload", "microphone"],
-                        type="filepath",
-                    )
-                with gr.Row(elem_classes="multi_dialog-roles"):
-                    speaker2_name = gr.Textbox(
-                        label="角色名称",
-                        value="角色2",
-                        interactive=True,
-                        elem_classes=["multi_dialog-role_name"],
-                    )
-                    speaker2_audio = gr.Audio(
-                        label="参考音频",
-                        key="speaker2_audio",
-                        sources=["upload", "microphone"],
-                        type="filepath",
-                    )
+                (speaker1_name, speaker1_server_audio, speaker1_audio) = create_role(default_name="角色1")
+                (speaker2_name, speaker2_server_audio, speaker2_audio) = create_role(default_name="角色2")
             with gr.Row():
-                with gr.Row(elem_classes="multi_dialog-roles"):
-                    speaker3_name = gr.Textbox(
-                        label="角色名称",
-                        value="角色3",
-                        interactive=True,
-                        elem_classes=["multi_dialog-role_name"],
-                    )
-                    speaker3_audio = gr.Audio(
-                        label="参考音频",
-                        key="speaker3_audio",
-                        sources=["upload", "microphone"],
-                        type="filepath",
-                    )
-                with gr.Row(elem_classes="multi_dialog-roles"):
-                    speaker4_name = gr.Textbox(
-                        label="角色名称",
-                        value="角色4",
-                        interactive=True,
-                        elem_classes=["multi_dialog-role_name"],
-                    )
-                    speaker4_audio = gr.Audio(
-                        label="参考音频",
-                        key="speaker4_audio",
-                        sources=["upload", "microphone"],
-                        type="filepath",
-                    )
+                (speaker3_name, speaker3_server_audio, speaker3_audio) = create_role(default_name="角色3")
+                (speaker4_name, speaker4_server_audio, speaker4_audio) = create_role(default_name="角色4")
             with gr.Row():
-                with gr.Row(elem_classes="multi_dialog-roles"):
-                    speaker5_name = gr.Textbox(
-                        label="角色名称",
-                        value="角色5",
-                        interactive=True,
-                        elem_classes=["multi_dialog-role_name"],
-                    )
-                    speaker5_audio = gr.Audio(
-                        label="参考音频",
-                        key="speaker5_audio",
-                        sources=["upload", "microphone"],
-                        type="filepath",
-                    )
-                with gr.Row(elem_classes="multi_dialog-roles"):
-                    speaker6_name = gr.Textbox(
-                        label="角色名称",
-                        value="角色6",
-                        interactive=True,
-                        elem_classes=["multi_dialog-role_name"],
-                    )
-                    speaker6_audio = gr.Audio(
-                        label="参考音频",
-                        key="speaker6_audio",
-                        sources=["upload", "microphone"],
-                        type="filepath",
-                    )
+                (speaker5_name, speaker5_server_audio, speaker5_audio) = create_role(default_name="角色5")
+                (speaker6_name, speaker6_server_audio, speaker6_audio) = create_role(default_name="角色6")
 
             dialog_text = gr.TextArea(
                 label="对话内容（请按参考示例格式输入）",
@@ -133,9 +84,7 @@ def create_multi_dialog_tab(tts_manager):
                     key="output_audio_multi",
                     elem_id="output-audio",
                 )
-                subtitle_output_multi = gr.File(
-                    label="字幕文件", visible=True, elem_id="output-subtitle"
-                )
+                subtitle_output_multi = gr.File(label="字幕文件", visible=True, elem_id="output-subtitle")
                 gen_button_multi = gr.Button(
                     "生成对话",
                     key="gen_button_multi",
@@ -143,51 +92,32 @@ def create_multi_dialog_tab(tts_manager):
                     elem_classes=["flex-auto", "bg-accent"],
                 )
 
-            gen_subtitle_multi, model_choice_multi, subtitle_lang_multi = (
-                create_subtitle_controls()
-            )
+            gen_subtitle_multi, model_choice_multi, subtitle_lang_multi = create_subtitle_controls()
 
-            bgm_upload_multi, bgm_volume_multi, bgm_loop_multi, additional_bgm_multi = (
-                create_bgm_accordion()
-            )
+            bgm_upload_multi, bgm_volume_multi, bgm_loop_multi, additional_bgm_multi = create_bgm_accordion()
 
-            # Add advanced parameters
             advanced_components = create_advanced_params_accordion(tts_manager)
             (
-                do_sample,
-                top_p,
-                top_k,
-                temperature,
-                length_penalty,
-                num_beams,
-                repetition_penalty,
-                max_mel_tokens,
-                max_text_tokens_per_sentence,
-                sentences_bucket_max_size,
-                sentences_preview,
-            ) = advanced_components
+                do_sample, top_p, top_k, temperature, length_penalty, num_beams, repetition_penalty, max_mel_tokens,
+                max_text_tokens_per_sentence,sentences_bucket_max_size,sentences_preview,
+            ) = advanced_components  # fmt: skip
 
             advanced_params = [
-                do_sample,
-                top_p,
-                top_k,
-                temperature,
-                length_penalty,
-                num_beams,
-                repetition_penalty,
-                max_mel_tokens,
-            ]
+                do_sample, top_p, top_k,
+                temperature, length_penalty, num_beams,
+                repetition_penalty, max_mel_tokens,
+            ]  # fmt: skip
 
             # Example dialog
             example_dialog = """[角色1]你在干什么？
-        [角色2]我什么也没干呀。
-        [角色1]那你拿刀干什么？
-        [角色2]我只是想要切菜。
-        [角色3]切菜需要那么大的刀吗？
-        [角色2]这只是一把普通的水果刀。
-        [角色4]都别吵了，快来吃饭吧！
-        [角色5]你们好吵啊！打扰我睡觉了。
-        [角色6]天天睡觉，睡死你得了！"""
+            [角色2]我什么也没干呀。
+            [角色1]那你拿刀干什么？
+            [角色2]我只是想要切菜。
+            [角色3]切菜需要那么大的刀吗？
+            [角色2]这只是一把普通的水果刀。
+            [角色4]都别吵了，快来吃饭吧！
+            [角色5]你们好吵啊！打扰我睡觉了。
+            [角色6]天天睡觉，睡死你得了！"""
 
             gr.Examples(
                 examples=[[example_dialog]],
@@ -195,22 +125,160 @@ def create_multi_dialog_tab(tts_manager):
                 label="示例对话",
                 elem_id="anchor-examples",
             )
+    # Load preset
+    load_preset_btn.click(
+        fn=load_preset_handler,
+        inputs=[preset_dropdown],
+        outputs=[
+            # Speaker names
+            speaker1_name,
+            speaker2_name,
+            speaker3_name,
+            speaker4_name,
+            speaker5_name,
+            speaker6_name,
+            # Server audio dropdowns
+            speaker1_server_audio,
+            speaker2_server_audio,
+            speaker3_server_audio,
+            speaker4_server_audio,
+            speaker5_server_audio,
+            speaker6_server_audio,
+            # Settings
+            interval,
+            gen_subtitle_multi,
+            model_choice_multi,
+            subtitle_lang_multi,
+            bgm_volume_multi,
+            bgm_loop_multi,
+            # Advanced params
+            do_sample,
+            top_p,
+            top_k,
+            temperature,
+            length_penalty,
+            num_beams,
+            repetition_penalty,
+            max_mel_tokens,
+        ],
+    )
+
+    # Save preset
+    save_preset_btn.click(
+        fn=save_preset_handler,
+        inputs=[
+            preset_name_input,
+            # Speaker names
+            speaker1_name,
+            speaker2_name,
+            speaker3_name,
+            speaker4_name,
+            speaker5_name,
+            speaker6_name,
+            # Server audio paths
+            speaker1_server_audio,
+            speaker2_server_audio,
+            speaker3_server_audio,
+            speaker4_server_audio,
+            speaker5_server_audio,
+            speaker6_server_audio,
+            # Uploaded audio files (we pass these but don't save the paths)
+            speaker1_audio,
+            speaker2_audio,
+            speaker3_audio,
+            speaker4_audio,
+            speaker5_audio,
+            speaker6_audio,
+            # Settings
+            interval,
+            gen_subtitle_multi,
+            model_choice_multi,
+            subtitle_lang_multi,
+            bgm_volume_multi,
+            bgm_loop_multi,
+            # Advanced params
+            do_sample,
+            top_p,
+            top_k,
+            temperature,
+            length_penalty,
+            num_beams,
+            repetition_penalty,
+            max_mel_tokens,
+        ],
+        outputs=[preset_status, preset_dropdown],
+    )
+
+    # Delete preset
+    delete_preset_btn.click(
+        fn=delete_preset_handler,
+        inputs=[preset_dropdown],
+        outputs=[preset_status, preset_dropdown],
+    )
+
+    preset_dropdown.select(
+        fn=lambda: None,  # Do nothing on select, load button handles loading
+        outputs=[],
+    )
+
+    gen_button_multi.click(
+        fn=lambda *args: gen_multi_dialog_audio(tts_manager.get_tts(), *args),
+        inputs=[
+            speaker1_name,
+            speaker1_audio,
+            speaker2_name,
+            speaker2_audio,
+            speaker3_name,
+            speaker3_audio,
+            speaker4_name,
+            speaker4_audio,
+            speaker5_name,
+            speaker5_audio,
+            speaker6_name,
+            speaker6_audio,
+            dialog_text,
+            interval,
+            # Advanced params from the tab
+            *advanced_params,
+            do_sample,
+            top_p,
+            top_k,
+            temperature,
+            length_penalty,
+            num_beams,
+            repetition_penalty,
+            max_mel_tokens,
+            gen_subtitle_multi,
+            model_choice_multi,
+            subtitle_lang_multi,
+            bgm_upload_multi,
+            bgm_volume_multi,
+            bgm_loop_multi,
+            additional_bgm_multi,
+        ],
+    )
 
     return {
         "inputs": {
             "speakers": {
                 "speaker1_name": speaker1_name,
                 "speaker1_audio": speaker1_audio,
+                "speaker1_server_audio": speaker1_server_audio,
                 "speaker2_name": speaker2_name,
                 "speaker2_audio": speaker2_audio,
+                "speaker2_server_audio": speaker2_server_audio,
                 "speaker3_name": speaker3_name,
                 "speaker3_audio": speaker3_audio,
+                "speaker3_server_audio": speaker3_server_audio,
                 "speaker4_name": speaker4_name,
                 "speaker4_audio": speaker4_audio,
+                "speaker4_server_audio": speaker4_server_audio,
                 "speaker5_name": speaker5_name,
                 "speaker5_audio": speaker5_audio,
+                "speaker5_server_audio": speaker5_server_audio,
                 "speaker6_name": speaker6_name,
                 "speaker6_audio": speaker6_audio,
+                "speaker6_server_audio": speaker6_server_audio,
             },
             "dialog_text": dialog_text,
             "interval": interval,
@@ -229,5 +297,15 @@ def create_multi_dialog_tab(tts_manager):
         "controls": {
             "gen_button_multi": gen_button_multi,
         },
+        "presets": {
+            "preset_dropdown": preset_dropdown,
+            "load_preset_btn": load_preset_btn,
+            "refresh_preset_btn": refresh_preset_btn,
+            "preset_name_input": preset_name_input,
+            "save_preset_btn": save_preset_btn,
+            "delete_preset_btn": delete_preset_btn,
+            "preset_status": preset_status,
+        },
         "advanced_params": advanced_params,
+        "init_presets": refresh_preset_list,
     }

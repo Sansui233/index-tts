@@ -1,17 +1,27 @@
 """
 Event handlers for UI interactions
 """
+
 import os
 import time
-import numpy as np
+
 import gradio as gr
+import numpy as np
 from scipy.io import wavfile
+
 from ..audio import mix_audio_with_bgm
+from ..utils import PresetManager, apply_preset_data, collect_preset_data
+
+# Initialize preset manager
+preset_manager = PresetManager()
 
 
-def gen_single(
-    tts, subtitle_manager,
-    prompt, text, infer_mode,
+def gen_audio(
+    tts,
+    subtitle_manager,
+    prompt,
+    text,
+    infer_mode,
     max_text_tokens_per_sentence=120,
     sentences_bucket_max_size=4,
     *args,
@@ -20,10 +30,16 @@ def gen_single(
     """Handle single audio generation"""
     output_path = os.path.join("outputs", f"spk_{int(time.time())}.wav")
     tts.gr_progress = progress
-    
+
     (
-        do_sample, top_p, top_k, temperature, length_penalty,
-        num_beams, repetition_penalty, max_mel_tokens,
+        do_sample,
+        top_p,
+        top_k,
+        temperature,
+        length_penalty,
+        num_beams,
+        repetition_penalty,
+        max_mel_tokens,
     ) = args[:8]
 
     kwargs = {
@@ -48,14 +64,18 @@ def gen_single(
     # Generate audio
     if infer_mode == "普通推理":
         output = tts.infer(
-            prompt, text, output_path,
+            prompt,
+            text,
+            output_path,
             verbose=True,  # cmd_args.verbose
             max_text_tokens_per_sentence=int(max_text_tokens_per_sentence),
             **kwargs,
         )
     else:
         output = tts.infer_fast(
-            prompt, text, output_path,
+            prompt,
+            text,
+            output_path,
             verbose=True,  # cmd_args.verbose
             max_text_tokens_per_sentence=int(max_text_tokens_per_sentence),
             sentences_bucket_max_size=sentences_bucket_max_size,
@@ -88,12 +108,23 @@ def gen_single(
     )
 
 
-def gen_multi_dialog(
-    tts, subtitle_manager,
-    speaker1_name, speaker1_audio, speaker2_name, speaker2_audio,
-    speaker3_name, speaker3_audio, speaker4_name, speaker4_audio,
-    speaker5_name, speaker5_audio, speaker6_name, speaker6_audio,
-    dialog_text, interval=0.5,
+def gen_multi_dialog_audio(
+    tts,
+    subtitle_manager,
+    speaker1_name,
+    speaker1_audio,
+    speaker2_name,
+    speaker2_audio,
+    speaker3_name,
+    speaker3_audio,
+    speaker4_name,
+    speaker4_audio,
+    speaker5_name,
+    speaker5_audio,
+    speaker6_name,
+    speaker6_audio,
+    dialog_text,
+    interval=0.5,
     *args,
     progress=gr.Progress(),
 ):
@@ -106,8 +137,14 @@ def gen_multi_dialog(
     # Get advanced parameters
     if len(args) >= 8:
         (
-            do_sample, top_p, top_k, temperature, length_penalty,
-            num_beams, repetition_penalty, max_mel_tokens,
+            do_sample,
+            top_p,
+            top_k,
+            temperature,
+            length_penalty,
+            num_beams,
+            repetition_penalty,
+            max_mel_tokens,
         ) = args[:8]
     else:
         progress(0.1, "警告：未接收到完整的高级参数，使用默认值")
@@ -204,9 +241,7 @@ def gen_multi_dialog(
         )
 
         output_path = os.path.join(temp_dir, f"{speaker}_{i}_{int(time.time())}.wav")
-        tts.infer(
-            speakers[speaker], text, output_path, verbose=True, **kwargs
-        )
+        tts.infer(speakers[speaker], text, output_path, verbose=True, **kwargs)
 
         sample_rate, audio_data = wavfile.read(output_path)
         sr = sample_rate
@@ -286,3 +321,128 @@ def on_input_text_change(tts, text, max_tokens_per_sentence):
 def update_prompt_audio():
     """Handle prompt audio update"""
     return gr.update(interactive=True)
+
+
+# Preset management functions
+def refresh_preset_list():
+    """Refresh the preset dropdown list"""
+    preset_list = preset_manager.get_preset_list()
+    choices = preset_list if preset_list else []
+    return gr.update(choices=choices, value=choices[0] if choices else None)
+
+
+def load_preset_handler(preset_name):
+    """Handle loading a preset"""
+    if not preset_name:
+        return (
+            [gr.update()] * 26
+        )  # Return empty updates for all components (20 + 6 server audio dropdowns)
+
+    preset_data = preset_manager.load_preset(preset_name)
+    if not preset_data:
+        return [gr.update()] * 26
+
+    updates = apply_preset_data(preset_data)
+
+    # Return updates in the order of components
+    result = []
+    # Speaker names (6)
+    for i in range(1, 7):
+        key = f"speaker{i}_name"
+        result.append(gr.update(value=updates.get(key, f"角色{i}")))
+
+    # Server audio dropdowns (6)
+    for i in range(1, 7):
+        key = f"speaker{i}_server_audio"
+        result.append(gr.update(value=updates.get(key, "")))
+
+    # Settings (6)
+    result.append(gr.update(value=updates.get("interval", 0.5)))
+    result.append(gr.update(value=updates.get("gen_subtitle_multi", True)))
+    result.append(gr.update(value=updates.get("model_choice_multi", "whisper-base")))
+    result.append(gr.update(value=updates.get("subtitle_lang_multi", "zh")))
+    result.append(gr.update(value=updates.get("bgm_volume_multi", 0.3)))
+    result.append(gr.update(value=updates.get("bgm_loop_multi", True)))
+
+    # Advanced params (8)
+    result.append(gr.update(value=updates.get("do_sample", True)))
+    result.append(gr.update(value=updates.get("top_p", 0.8)))
+    result.append(gr.update(value=updates.get("top_k", 30)))
+    result.append(gr.update(value=updates.get("temperature", 1.0)))
+    result.append(gr.update(value=updates.get("length_penalty", 0.0)))
+    result.append(gr.update(value=updates.get("num_beams", 3)))
+    result.append(gr.update(value=updates.get("repetition_penalty", 10.0)))
+    result.append(gr.update(value=updates.get("max_mel_tokens", 600)))
+
+    return result
+
+
+def save_preset_handler(preset_name, *args):
+    """Handle saving a preset"""
+    if not preset_name or not preset_name.strip():
+        return gr.update(value="❌ 请输入预设名称"), refresh_preset_list()
+
+    preset_name = preset_name.strip()
+
+    # Extract parameters from args
+    # Speaker names (6) + Server audio paths (6) + Audio files (6) + Settings (6) + Advanced (8) = 32
+    speakers_data = {}
+    audio_data = {}
+
+    for i in range(6):
+        speakers_data[f"speaker{i + 1}_name"] = args[i]
+
+    # Server audio paths - these are the actual selected server files
+    for i in range(6):
+        server_audio_path = args[i + 6]
+        if server_audio_path:  # Only save if a server audio is selected
+            audio_data[f"speaker{i + 1}_audio"] = server_audio_path
+
+    # Skip the uploaded audio files (args[12:18]) as we don't save those paths
+
+    # Settings start at index 18 (6 names + 6 server audio + 6 uploaded audio)
+    interval = args[18]
+    gen_subtitle = args[19]
+    model_choice = args[20]
+    subtitle_lang = args[21]
+    bgm_volume = args[22]
+    bgm_loop = args[23]
+
+    # Advanced params start at index 24
+    advanced_params = list(args[24:32])
+
+    preset_data = collect_preset_data(
+        speakers_data,
+        interval,
+        gen_subtitle,
+        model_choice,
+        subtitle_lang,
+        bgm_volume,
+        bgm_loop,
+        advanced_params,
+        audio_data,
+    )
+
+    success = preset_manager.save_preset(preset_name, preset_data)
+
+    if success:
+        message = f"✅ 预设 '{preset_name}' 保存成功"
+    else:
+        message = f"❌ 保存预设 '{preset_name}' 失败"
+
+    return gr.update(value=message), refresh_preset_list()
+
+
+def delete_preset_handler(preset_name):
+    """Handle deleting a preset"""
+    if not preset_name:
+        return gr.update(value="❌ 请选择要删除的预设"), refresh_preset_list()
+
+    success = preset_manager.delete_preset(preset_name)
+
+    if success:
+        message = f"✅ 预设 '{preset_name}' 删除成功"
+    else:
+        message = f"❌ 删除预设 '{preset_name}' 失败"
+
+    return gr.update(value=message), refresh_preset_list()

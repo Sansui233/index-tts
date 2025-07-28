@@ -14,9 +14,7 @@ def create_advanced_params_accordion(tts):
                     "**GPT2 采样设置** _参数会影响音频多样性和生成速度详见[Generation strategies](https://huggingface.co/docs/transformers/main/en/generation_strategies)_"
                 )
                 with gr.Row():
-                    do_sample = gr.Checkbox(
-                        label="do_sample", value=True, info="是否进行采样"
-                    )
+                    do_sample = gr.Checkbox(label="do_sample", value=True, info="是否进行采样")
                     temperature = gr.Slider(
                         label="temperature",
                         minimum=0.1,
@@ -32,12 +30,8 @@ def create_advanced_params_accordion(tts):
                         value=0.8,
                         step=0.01,
                     )
-                    top_k = gr.Slider(
-                        label="top_k", minimum=0, maximum=100, value=30, step=1
-                    )
-                    num_beams = gr.Slider(
-                        label="num_beams", value=3, minimum=1, maximum=10, step=1
-                    )
+                    top_k = gr.Slider(label="top_k", minimum=0, maximum=100, value=30, step=1)
+                    num_beams = gr.Slider(label="num_beams", value=3, minimum=1, maximum=10, step=1)
                 with gr.Row():
                     repetition_penalty = gr.Number(
                         label="repetition_penalty",
@@ -92,7 +86,7 @@ def create_advanced_params_accordion(tts):
                         wrap=True,
                     )
 
-    return [
+    return (
         do_sample,
         top_p,
         top_k,
@@ -104,20 +98,16 @@ def create_advanced_params_accordion(tts):
         max_text_tokens_per_sentence,
         sentences_bucket_max_size,
         sentences_preview,
-    ]
+    )
 
 
 def create_bgm_accordion():
     """Create background music settings accordion"""
     with gr.Accordion("背景音乐设置", open=True, elem_id="bgm-accordion"):
         bgm_upload = gr.Audio(label="背景音乐", sources=["upload"], type="filepath")
-        bgm_volume = gr.Slider(
-            label="背景音乐音量", minimum=0.0, maximum=1.0, value=0.3, step=0.01
-        )
+        bgm_volume = gr.Slider(label="背景音乐音量", minimum=0.0, maximum=1.0, value=0.3, step=0.01)
         bgm_loop = gr.Checkbox(label="循环背景音乐", value=True)
-        additional_bgm = gr.Files(
-            label="额外背景音乐（用于拼接）", file_count="multiple"
-        )
+        additional_bgm = gr.Files(label="额外背景音乐（用于拼接）", file_count="multiple")
 
     return bgm_upload, bgm_volume, bgm_loop, additional_bgm
 
@@ -126,7 +116,7 @@ def create_subtitle_controls():
     """Create subtitle generation controls"""
     with gr.Row(elem_id="subtitle-controls"):
         gen_subtitle = gr.Checkbox(label="生成字幕文件", value=False)
-        model_choice = gr.Dropdown(
+        subtitle_model = gr.Dropdown(
             choices=["tiny", "base", "small", "medium"],
             value="base",
             label="字幕模型",
@@ -137,7 +127,7 @@ def create_subtitle_controls():
             label="字幕语言",
         )
 
-    return gen_subtitle, model_choice, subtitle_lang
+    return gen_subtitle, subtitle_model, subtitle_lang
 
 
 def create_header():

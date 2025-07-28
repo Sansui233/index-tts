@@ -6,7 +6,7 @@ import os
 import shutil
 import traceback
 
-from audio_subtitle import AudioSubtitleGenerator
+from webui2.utils.audio_subtitle import AudioSubtitleGenerator
 
 
 class SubtitleManager:
