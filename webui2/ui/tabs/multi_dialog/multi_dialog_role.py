@@ -15,12 +15,13 @@ def create_role(i=1):
                 interactive=True,
                 elem_classes=["multi_dialog-role_name"],
                 scale=1,
+                min_width=100,
             )
             gr_server_audio = gr.Dropdown(
                 label="选择服务器音频",
                 key=f"speaker{i + 1}_server_audio",
                 choices=server_audio_manager.get_flat_audio_choices(),
-                value="",
+                value=None,
                 interactive=True,
                 allow_custom_value=False,
                 scale=2,

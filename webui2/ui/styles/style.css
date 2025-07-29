@@ -61,6 +61,11 @@ footer {
 
 
 /** multi_dialog-roles */
+.multi_dialog-roles .multi_dialog-role_name,
+.multi_dialog-roles .audio-container {
+  height: 90px !important;
+}
+
 .multi_dialog-roles .audio-container>button>.wrap {
   flex-direction: row !important;
 }

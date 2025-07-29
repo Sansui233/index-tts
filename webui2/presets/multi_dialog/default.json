@@ -1,0 +1,30 @@
+{
+  "speakers": {
+    "speaker1_name": "角色1",
+    "speaker1_audio": "samples/example1.wav",
+    "speaker2_name": "角色2",
+    "speaker2_audio": "samples/example1.wav",
+    "speaker3_name": "角色3",
+    "speaker4_name": "角色4",
+    "speaker5_name": "角色5",
+    "speaker6_name": "角色6"
+  },
+  "settings": {
+    "interval": 0.5,
+    "gen_subtitle": false,
+    "subtitle_model": "base",
+    "subtitle_lang": "zh",
+    "bgm_volume": 0.3,
+    "bgm_loop": true
+  },
+  "advanced_params": {
+    "do_sample": true,
+    "top_p": 0.8,
+    "top_k": 30,
+    "temperature": 1,
+    "length_penalty": 0,
+    "num_beams": 3,
+    "repetition_penalty": 10,
+    "max_mel_tokens": 600
+  }
+}

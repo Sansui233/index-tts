@@ -72,9 +72,9 @@ def on_save_preset_click(
     *speakers,
 ):
     """Handle saving a preset"""
-    if not preset_name or not preset_name.strip():
+    if not preset_name or preset_name.strip() == "":
         gr.Error("❌ 请输入预设名称")
-        return on_refresh_preset_list()
+        return None
 
     preset_name = preset_name.strip()
 
@@ -88,7 +88,7 @@ def on_save_preset_click(
 
     # Server audio paths - these are the actual selected server files
     for i in range(speaker_count):
-        audio_data[f"speaker{i + 1}_audio"] = speakers[i * 3] + 1
+        audio_data[f"speaker{str(i + 1)}_audio"] = speakers[i * 3 + 1]
 
     preset_data = collect_preset_data(
         speaker_count,
@@ -152,7 +152,6 @@ def on_load_preset_click(preset_name, speaker_count):
         return
 
     config = flatten_preset_config(preset_data, speaker_count)
-    print("[webui2] [Debug] updates:", config)
 
     # Return updates in the order of components
     result = []
@@ -181,7 +180,6 @@ def on_load_preset_click(preset_name, speaker_count):
         # Server audio dropdowns
         key = f"speaker{i + 1}_server_audio"
         result.append(gr.update(value=config.get(key, None)))
-        print(f"[webui2] [Debug] Load Server audio {i + 1}:", config.get(key, None))
         # Server audio Blobs. Set to None, updated by gr_server_audio.change
         result.append(None)
 

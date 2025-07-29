@@ -77,6 +77,7 @@ def create_multi_dialog_tab_page(
                 elem_id="anchor-dialog_text",
                 placeholder="请输入对话内容（格式示例）:\n[角色1]你在干什么？\n[角色2]我什么也没干呀。\n[角色1]那你拿刀干什么？\n[角色2]我只是想要切菜。",
                 lines=8,
+                interactive=True,
             )
 
             interval = gr.Slider(
@@ -86,6 +87,7 @@ def create_multi_dialog_tab_page(
                 value=0.5,
                 step=0.1,
                 info="不同角色之间的间隔时间",
+                interactive=True,
             )
 
             # output part
@@ -96,26 +98,29 @@ def create_multi_dialog_tab_page(
                     visible=True,
                     key="multi_output_audio",
                     elem_id="output-audio",
+                    interactive=False,
                 )
                 multi_subtitle_output = gr.File(
-                    label="字幕文件", visible=True, elem_id="output-subtitle"
+                    label="字幕文件",
+                    visible=True,
+                    elem_id="output-subtitle",
+                    interactive=False,
                 )
                 multi_gen_button = gr.Button(
                     "生成对话",
                     key="multi_gen_button",
-                    interactive=True,
                     elem_classes=["flex-auto", "bg-accent"],
+                    interactive=True,
                 )
 
             gen_subtitle, subtitle_model, subtitle_lang = create_subtitle_controls()
 
             bgm_upload, bgm_volume, bgm_loop, additional_bgm = create_bgm_accordion()
 
-            advanced_components = create_advanced_params_accordion(tts_manager)
             (
                 do_sample, top_p, top_k, temperature, length_penalty, num_beams, repetition_penalty, max_mel_tokens,
                 max_text_tokens_per_sentence,sentences_bucket_max_size,sentences_preview,
-            ) = advanced_components  # fmt: skip
+            ) = create_advanced_params_accordion(tts_manager)  # fmt: skip
 
             advanced_params = [
                 do_sample, top_p, top_k,
@@ -213,9 +218,10 @@ def create_multi_dialog_tab_page(
     def wrapped_multi_gen_click(speaker_list: list):
         multi_gen_button.click(
             fn=lambda *args: gen_multi_dialog_audio(
-                tts_manager.get_tts(), subtitle_manager, 6, *args
+                tts_manager.get_tts(), subtitle_manager, *args
             ),
             inputs=[
+                speaker_count,
                 dialog_text,
                 interval,
                 # Advanced params from the tab
@@ -229,5 +235,5 @@ def create_multi_dialog_tab_page(
                 additional_bgm,
                 *speaker_list,
             ],
-            outputs=[multi_subtitle_output, multi_output_audio],
+            outputs=[multi_output_audio, multi_subtitle_output],
         )

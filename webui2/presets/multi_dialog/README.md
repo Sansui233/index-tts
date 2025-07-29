@@ -52,6 +52,7 @@ Presets are stored as JSON files with the following structure:
 {
   "speakers": {
     "speaker1_name": "角色名1",
+    "speaker1_audio": "samples/语音样本/sample.wav",
     "speaker2_name": "角色名2",
     ...
   },

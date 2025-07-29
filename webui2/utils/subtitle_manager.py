@@ -5,6 +5,7 @@ Subtitle generation utilities
 import os
 import subprocess
 import traceback
+from pathlib import Path
 
 import torch
 from opencc import OpenCC
@@ -29,24 +30,28 @@ class SubtitleManager:
         self,
         audio_path,
         subtitle_model="base",
-        subtitle_lang="zh (中文)",
+        subtitle_lang="zh",
         output_srt=None,
     ):
         """Generate subtitles for audio file"""
         try:
-            if not os.path.exists(audio_path) or os.path.getsize(audio_path) == 0:
+            audio_file = Path(audio_path)
+            if not audio_file.exists() or audio_file.stat().st_size == 0:
                 print("警告: 音频文件为空或不存在，跳过字幕生成")
                 return None
 
             lang_code = subtitle_lang.split(" ")[0]
 
             if not output_srt:
-                base_name = os.path.splitext(os.path.basename(audio_path))[0]
-                output_srt = os.path.join("outputs", f"{base_name}.srt")
+                base_name = audio_file.stem
+                output_srt = Path("outputs") / f"{base_name}.srt"
+                output_srt = output_srt.as_posix()
 
             self.generator.set_model(subtitle_model)
 
-            generated_subtitle = self.generator.generate_subtitles(audio_path, language=lang_code, output_srt=output_srt)
+            generated_subtitle = self.generator.generate_subtitles(
+                audio_path, language=lang_code, output_srt=output_srt
+            )
 
             if generated_subtitle and os.path.exists(generated_subtitle):
                 print(f"字幕文件已生成: {generated_subtitle}")
@@ -68,11 +73,14 @@ class SubtitleManager:
             if audio_path is None:
                 return None, "请先上传音频文件"
 
-            if not os.path.exists(audio_path) or os.path.getsize(audio_path) == 0:
+            audio_file = Path(audio_path)
+            if not audio_file.exists() or audio_file.stat().st_size == 0:
                 return None, "音频文件无效或为空"
 
             try:
-                result = self.generate_subtitles(audio_path, subtitle_model, subtitle_lang)
+                result = self.generate_subtitles(
+                    audio_path, subtitle_model, subtitle_lang
+                )
                 if result:
                     return result, "字幕生成成功！"
                 else:
@@ -93,14 +101,14 @@ class AudioSubtitleGenerator:
     def __init__(self, root_dir=None):
         # 确定根目录
         if root_dir is None:
-            root_dir = os.path.dirname(os.path.abspath(__file__))
+            root_dir = Path.cwd().resolve().as_posix()
 
         # 模型路径映射 - 使用绝对路径
         self.model_dirs = {
-            "tiny": os.path.join(root_dir, "models", "whisper-tiny"),
-            "base": os.path.join(root_dir, "models", "whisper-base"),
-            "small": os.path.join(root_dir, "models", "whisper-small"),
-            "medium": os.path.join(root_dir, "models", "whisper-medium"),
+            "tiny": Path(root_dir) / "models" / "whisper-tiny",
+            "base": Path(root_dir) / "models" / "whisper-base",
+            "small": Path(root_dir) / "models" / "whisper-small",
+            "medium": Path(root_dir) / "models" / "whisper-medium",
         }
         self.asr_pipeline = None
         self.sample_rate = 16000
@@ -155,7 +163,13 @@ class AudioSubtitleGenerator:
             command = f'"{ffmpeg_exe}" -y -i "{input_path}" -ac 1 -ar {self.sample_rate} "{output_path}"'
 
         try:
-            result = subprocess.run(command, shell=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            result = subprocess.run(
+                command,
+                shell=True,
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
             return True
         except subprocess.CalledProcessError as e:
             print(f"FFmpeg转换失败: {e.stderr.decode('utf-8', errors='ignore')}")
@@ -178,7 +192,9 @@ class AudioSubtitleGenerator:
             if not os.path.exists(model_dir):
                 print(f"错误: 模型目录不存在: {model_dir}")
                 print("请下载模型并放置到该目录")
-                print(f"模型下载地址: https://huggingface.co/openai/whisper-{model_size}")
+                print(
+                    f"模型下载地址: https://huggingface.co/openai/whisper-{model_size}"
+                )
                 self.asr_pipeline = None
                 return
 
@@ -188,7 +204,7 @@ class AudioSubtitleGenerator:
             # 使用更高效的 pipeline API
             self.asr_pipeline = pipeline(
                 "automatic-speech-recognition",
-                model=model_dir,
+                model=model_dir.as_posix(),
                 device=0 if torch.cuda.is_available() else -1,
             )
 

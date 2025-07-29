@@ -117,6 +117,7 @@ def collect_preset_data(
             audio_path = audio_data.get(f"speaker{i}_audio")
             if audio_path and server_audio_manager.is_server_audio(audio_path):
                 relative_path = server_audio_manager.get_relative_path(audio_path)
+                print("[webui2] [Debug] save format2:", relative_path)
                 preset_data["speakers"][f"speaker{i}_audio"] = relative_path
 
     # Collect advanced parameters

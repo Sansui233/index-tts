@@ -2,9 +2,8 @@
 Server audio file management utilities
 """
 
-import glob
 import os
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Dict, List, Optional, Tuple
 
 
@@ -32,12 +31,13 @@ class ServerAudioManager:
                 continue
 
         self.base_audio_dirs = audio_dirs
-        self.supported_formats = [".wav", ".WAV", ".mp3", ".flac", ".m4a"]
+        self.supported_formats = [".wav", ".mp3", ".flac", ".m4a"]
 
     def get_server_audio_list(self) -> Dict[str, List[str]]:
-        """Get categorized list of server audio files
-        return: Dict<category_name, display_files>
-        category_name: 一级目录名 | "通用样本"
+        """Get categorized list of server audio files\n
+        return: Dict<category_name, display_files>\n
+        - category_name: dirname\n
+        - display_files: (filename, full_path)
         """
         audio_files = {}
 
@@ -45,40 +45,38 @@ class ServerAudioManager:
             if not os.path.exists(base_dir):
                 continue
 
-            category_name = (
-                os.path.basename(base_dir) if base_dir != "samples" else "通用样本"
-            )
+            category_name = os.path.basename(base_dir)
             if category_name == "":
                 category_name = "根目录"
 
-            files = []
-
             # Get all audio files in this directory
-            for ext in self.supported_formats:
-                pattern = Path(base_dir).glob(f"*{ext}")
-                found_files = [str(p.as_posix()) for p in pattern]
-                files.extend(found_files)
-            if files:
-                # Convert to relative paths for display, but keep full paths for loading
-                display_files = []
-                for file_path in sorted(files):
-                    filename = os.path.basename(file_path)
-                    display_files.append((filename, file_path))
+            files = []
+            for file in Path(base_dir).glob("*"):
+                if file.is_file() and file.suffix.lower() in self.supported_formats:
+                    files.append(str(file.as_posix()))
 
-                audio_files[category_name] = display_files
+            # Convert files to list of tuples (filename, full_path)
+            audio_files[category_name] = [
+                (os.path.basename(file_path), file_path) for file_path in sorted(files)
+            ]
 
         return audio_files
 
     def get_flat_audio_choices(self) -> List[Tuple[str, str]]:
-        """Get flattened list of audio choices for dropdown"""
-        choices = [("选择服务器音频文件...", "")]
+        """Get flattened list of audio choices for dropdown\n
+        return List of tuples (display_name, file_path)
+        """
+        choices = []
         audio_files = self.get_server_audio_list()
 
         for category, files in audio_files.items():
             for filename, filepath in files:
+                if len(filename) > 23:
+                    filename = filename[:20] + "..."
                 display_name = f"[{category}] {filename}"
                 choices.append((display_name, filepath))
 
+        print("[webui2] [Debug] Flattened audio choices:", len(choices), "items")
         return choices
 
     def is_server_audio(self, file_path: str) -> bool:
@@ -101,7 +99,7 @@ class ServerAudioManager:
 
         # Try to make it relative to the current working directory
         try:
-            return os.path.relpath(file_path)
+            return str(PurePosixPath(Path(file_path).relative_to(Path.cwd())))
         except ValueError:
             return file_path
 
