@@ -1,3 +1,4 @@
+.venv
 venv/
 __pycache__
 *.egg-info
@@ -12,4 +13,9 @@ outputs/
 build/
 *.py[cod]
 *.egg-info/
-.venv
+
+models/whisper*
+samples/*
+!samples/example1.wav
+temp_dialog/
+

@@ -1,0 +1,157 @@
+.gradio-container {
+  height: 100vh;
+  overflow: auto;
+}
+.gradio-container .tab-wrapper {
+  position: sticky !important;
+  top: 0;
+  z-index: 99;
+  background: #ffffffaa;
+  backdrop-filter: blur(20px);
+}
+.gradio-container .tab-wrapper,
+.gradio-container .tab-container {
+  height: 3rem !important;
+  padding-bottom: 0 !important;
+}
+footer {
+  padding-bottom: 11rem !important;
+}
+
+
+
+/** Function */
+
+.flex-auto {
+  flex: 0 0 auto !important;
+}
+
+.bg-accent {
+  background-color: var(--color-accent) !important;
+}
+
+.display-none {
+  display: none !important;
+}
+
+
+/** Sidebar */
+#sidebar-anchors {
+    position: sticky;
+    top: 4rem;
+    min-width: 8rem !important;
+}
+#sidebar-anchors > div {
+  overflow: clip !important;
+  height: 1.5rem !important;
+}
+#sidebar-anchors .html-container {
+  padding: 0;
+}
+#sidebar-anchors a {
+  display: block;
+  text-decoration: none;
+  font-size: 1rem;
+  font-weight: 500;
+}
+#sidebar-anchors a h3.prose {
+  color: var(--neutral-600);
+}
+
+
+
+/** multi_dialog-roles */
+.multi_dialog-roles .multi_dialog-role_name,
+.multi_dialog-roles .audio-container {
+  height: 90px !important;
+}
+
+.multi_dialog-roles .audio-container>button>.wrap {
+  flex-direction: row !important;
+}
+.multi_dialog-roles .audio-container .source-selection {
+  position: absolute !important;
+  justify-content: flex-end !important;
+}
+.multi_dialog-roles .audio-container .timestamps {
+  position: absolute !important;
+  top: 5rem;
+  width: 100%;
+  padding-right: 1.5rem !important;
+}
+.multi_dialog-roles .audio-container .controls {
+    position: absolute !important;
+    top: 4rem;
+    left: 3rem;
+    width: calc(100% - 6rem) !important;
+}
+
+
+
+
+
+/**Output Styles */
+
+#multi-dialog-output,
+#single-audio-output {
+  position: fixed;
+  bottom: 0rem;
+  left: 2%;
+  background: #ffffffaa;
+  backdrop-filter: blur(20px);
+  z-index: 99;
+  width: 96%;
+  padding: 1rem;
+  display: flex;
+  height: 9rem;
+  border: 1px solid #88888833;
+  border-radius: 5px 5px 0 0;
+  overflow-y: auto;
+}
+#multi-dialog-output .flex-auto,
+#single-audio-output .flex-auto {
+  flex: 0 0 auto;
+}
+#multi-dialog-output #output-subtitle,
+#single-audio-output #output-subtitle {
+  height: 4rem;
+  min-height: unset;
+}
+#multi-dialog-output #output-audio,
+#single-audio-output #output-audio {
+  height: 4rem;
+  min-height: unset;
+}
+#multi-dialog-output #output-audio .component-wrapper,
+#single-audio-output #output-audio .component-wrapper {
+    width: 100%;
+    padding: 0;;
+    position: absolute;
+    top: 0rem;
+}
+#multi-dialog-output #output-audio .component-wrapper .waveform-container,
+#single-audio-output #output-audio .component-wrapper .waveform-container {
+    width: 100%;
+    height: 100%;
+    padding-top: 2.3rem;
+}
+#multi-dialog-output #output-audio .component-wrapper .timestamps,
+#single-audio-output #output-audio .component-wrapper .timestamps {
+  top: 2.65rem;
+  position: absolute;
+  padding-left: 3px;
+  padding-right: 3px;
+}
+#multi-dialog-output .timestamps #time, 
+#single-audio-output .timestamps #duration {
+  background: white;
+  border-radius: 99px;
+}
+#multi-dialog-output #output-audio .component-wrapper .controls,
+#single-audio-output #output-audio .component-wrapper .controls {
+  top: -4px;
+  right: 0px;
+  position: absolute;
+  padding-left: 3px;
+  padding-right: 3px;
+}

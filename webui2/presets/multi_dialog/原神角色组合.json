@@ -1,0 +1,32 @@
+{
+  "speakers": {
+    "speaker1_name": "雷电将军",
+    "speaker1_audio": "samples/语音样本/原神-雷电将军.WAV",
+    "speaker2_name": "胡桃",
+    "speaker2_audio": "samples/语音样本/原神-胡桃.WAV",
+    "speaker3_name": "播音员",
+    "speaker3_audio": "samples/语音样本/播音中年男.mp3",
+    "speaker4_name": "林志玲",
+    "speaker4_audio": "samples/语音样本/林志玲.wav",
+    "speaker5_name": "角色5",
+    "speaker6_name": "角色6"
+  },
+  "settings": {
+    "interval": 0.8,
+    "gen_subtitle": true,
+    "subtitle_model": "base",
+    "subtitle_lang": "zh",
+    "bgm_volume": 0.2,
+    "bgm_loop": true
+  },
+  "advanced_params": {
+    "do_sample": true,
+    "top_p": 0.9,
+    "top_k": 35,
+    "temperature": 1.1,
+    "length_penalty": 0.1,
+    "num_beams": 3,
+    "repetition_penalty": 8.0,
+    "max_mel_tokens": 500
+  }
+}
