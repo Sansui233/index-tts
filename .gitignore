@@ -16,5 +16,6 @@ build/
 
 models/whisper*
 samples/*
+!samples/example1.wav
 temp_dialog/
 
