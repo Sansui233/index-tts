@@ -28,7 +28,6 @@ def create_multi_dialog_tab_page(
 ):
     """Create the multi-dialog generation tab"""
     speaker_count = gr.State(6)
-    speakers = []  # length: count * 3, tuple[Textbox, Dropdown, Audio]
 
     with gr.Row(elem_id="multi-dialog"):
         # navigation section

@@ -20,7 +20,11 @@ from webui2.config import (
     validate_model_files,
 )
 from webui2.ui.common import create_header
-from webui2.ui.tabs import *
+from webui2.ui.tabs import (
+    create_multi_dialog_tab_page,
+    create_single_audio_tab_page,
+    create_subtitle_only_tab_page,
+)
 from webui2.utils import SubtitleManager, TTSManager
 
 # Initialize environment

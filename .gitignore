@@ -5,6 +5,7 @@ __pycache__
 *.DS_Store
 .idea/
 .vscode/
+.zed/
 checkpoints/*.pth
 checkpoints/*.vocab
 checkpoints/*.model
@@ -18,4 +19,3 @@ models/whisper*
 samples/*
 !samples/example1.wav
 temp_dialog/
-
