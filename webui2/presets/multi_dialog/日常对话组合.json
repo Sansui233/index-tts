@@ -7,9 +7,7 @@
     "speaker3_name": "甜美女声",
     "speaker3_audio": "samples/语音样本/甜美女声.mp3",
     "speaker4_name": "沉稳高管",
-    "speaker4_audio": "samples/语音样本/沉稳高管.mp3",
-    "speaker5_name": "角色5",
-    "speaker6_name": "角色6"
+    "speaker4_audio": "samples/语音样本/沉稳高管.mp3"
   },
   "settings": {
     "interval": 0.6,

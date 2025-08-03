@@ -2,6 +2,9 @@
 Multi-dialog generation tab
 """
 
+import os
+import webbrowser
+
 import gradio as gr
 
 from webui2.ui.common import (
@@ -12,6 +15,7 @@ from webui2.ui.common import (
 from webui2.ui.handlers.generate import (
     gen_multi_dialog_audio,
 )
+from webui2.ui.tabs.multi_dialog.multi_dialog_templist import create_temp_list
 from webui2.utils import SubtitleManager, TTSManager
 
 from .multi_dialog_presets import (
@@ -27,17 +31,16 @@ def create_multi_dialog_tab_page(
     tts_manager: TTSManager, subtitle_manager: SubtitleManager
 ):
     """Create the multi-dialog generation tab"""
-    speaker_count = gr.State(6)
 
     with gr.Row(elem_id="multi-dialog"):
         # navigation section
         with gr.Column(elem_id="sidebar-anchors", scale=1):
-            gr.HTML('<a href="#anchor-multi_dialog_roles"><h3">🧑 角色配置<h3></a>')
+            gr.HTML('<a href="#anchor-multi_dialog_roles"><h3">🗣️ 角色配置<h3></a>')
             gr.HTML('<a href="#anchor-dialog_text"><h3">💬 对话<h3></a>')
             gr.HTML('<a href="#subtitle-controls"><h3">🎬 字幕<h3></a>')
             gr.HTML('<a href="#bgm-accordion""><h3">🎵 背景音乐<h3></a>')
             gr.HTML('<a href="#advanced-params""><h3">⚙️ 高级参数<h3></a>')
-            gr.HTML('<a href="#anchor-examples"><h3">📝 示例<h3></a>')
+            gr.HTML('<a href="#anchor-temp-list"><h3">🗂️ 临时对话列表 <h3></a>')
 
         # Speaker configuration rows
         with gr.Column(scale=9):
@@ -53,28 +56,42 @@ def create_multi_dialog_tab_page(
 
             # roles part
             gr.Markdown(
-                "### 角色配置 \n 请为每个角色上传参考音频，然后在下方输入对话内容",
+                "### 🗣️ 角色配置（必填） \n 为每个角色选择或上传音频，然后在下方填写对话内容。",
                 elem_id="anchor-multi_dialog_roles",
             )
 
-            @gr.render(inputs=speaker_count)
-            def render_roles(speaker_count):
-                speakers = []  # length: count * 3, tuple[Textbox, Dropdown, Audio]
-                for i in range(0, speaker_count, 2):
+            # speaker_count 其实必须和 speaker_data 同步
+            # save_preset_btn 和 multi_gen_button 都单独需要 speaker_data
+            speaker_count = gr.State(2)
+            speakers_data = gr.State(
+                [("角色1", None), ("角色2", None)]
+            )  # List of (Name, AudioPathOnServer)
+
+            @gr.render(inputs=(speakers_data))
+            def render_roles(speakers_data: list[tuple]):
+                gr_speakers = []  # length: count * 3, tuple[Textbox, Dropdown, Audio]
+                if len(gr_speakers) > len(speakers_data) * 3:
+                    gr_speakers = gr_speakers[: len(speakers_data) * 3]
+
+                for i in range(0, len(speakers_data), 2):  # 布局控制2个一行
                     with gr.Row():
-                        speakers.extend(create_role(i + 1))
-                        if i + 1 < speaker_count:
-                            speakers.extend(create_role(i + 2))
-                    wrapped_load_preset_click(speakers)
-                    wrapped_save_preset_click(speakers)
-                    wrapped_multi_gen_click(speakers)
-                    print("[webui2] [Debug] speakers len", int(len(speakers) / 3))
+                        gr_speakers.extend(create_role(i + 1, speakers_data[i]))
+                        if i + 1 < len(speakers_data):
+                            gr_speakers.extend(create_role(i + 2, speakers_data[i + 1]))  # fmt:off
+
+                wrapped_save_preset_click(gr_speakers)  # as handler input
+                wrapped_multi_gen_click(gr_speakers)  # as handler input
+
+            # Add and Remove Role Buttons
+            with gr.Row():
+                add_role_btn = gr.Button("添加角色", elem_id="add-role-btn")
+                remove_role_btn = gr.Button("删除角色", elem_id="remove-role-btn")
 
             # dialog part
+            gr.Markdown("### 💬 对话内容（必填）", elem_id="anchor-dialog_text")
             dialog_text = gr.TextArea(
-                label="对话内容（请按参考示例格式输入）",
-                elem_id="anchor-dialog_text",
-                placeholder="请输入对话内容（格式示例）:\n[角色1]你在干什么？\n[角色2]我什么也没干呀。\n[角色1]那你拿刀干什么？\n[角色2]我只是想要切菜。",
+                label="对话内容",
+                placeholder="（使用以下对话格式）:\n[角色1]你在干什么？\n[角色2]我什么也没干呀。\n[角色1]那你拿刀干什么？\n[角色2]我只是想要切菜。",
                 lines=8,
                 interactive=True,
             )
@@ -98,12 +115,14 @@ def create_multi_dialog_tab_page(
                     key="multi_output_audio",
                     elem_id="output-audio",
                     interactive=False,
+                    scale=2,
                 )
                 multi_subtitle_output = gr.File(
                     label="字幕文件",
                     visible=True,
                     elem_id="output-subtitle",
                     interactive=False,
+                    scale=2,
                 )
                 multi_gen_button = gr.Button(
                     "生成对话",
@@ -111,9 +130,33 @@ def create_multi_dialog_tab_page(
                     elem_classes=["flex-auto", "bg-accent"],
                     interactive=True,
                 )
+                open_output_folder = gr.Button(
+                    "打开输出目录",
+                    key="open_output_folder",
+                    elem_classes=["flex-auto"],
+                    interactive=True,
+                )
+            example_dialog = """[角色1]你在干什么？
+[角色2]我什么也没干呀。
+[角色1]那你拿刀干什么？
+[角色2]我只是想要切菜。
+[角色3]切菜需要那么大的刀吗？
+[角色2]这只是一把普通的水果刀。
+[角色4]都别吵了，快来吃饭吧！
+[角色5]你们好吵啊！打扰我睡觉了。
+[角色6]天天睡觉，睡死你得了！"""
+
+            gr.Examples(
+                examples=[[example_dialog]],
+                inputs=[dialog_text],
+                label="示例对话",
+                elem_id="anchor-examples",
+            )
 
             gen_subtitle, subtitle_model, subtitle_lang = create_subtitle_controls()
+            # Example dialog
 
+            # Advanced parameters
             bgm_upload, bgm_volume, bgm_loop, additional_bgm = create_bgm_accordion()
 
             (
@@ -127,55 +170,44 @@ def create_multi_dialog_tab_page(
                 repetition_penalty, max_mel_tokens,
             ]  # fmt: skip
 
-            # Example dialog
-            example_dialog = """[角色1]你在干什么？
-            [角色2]我什么也没干呀。
-            [角色1]那你拿刀干什么？
-            [角色2]我只是想要切菜。
-            [角色3]切菜需要那么大的刀吗？
-            [角色2]这只是一把普通的水果刀。
-            [角色4]都别吵了，快来吃饭吧！
-            [角色5]你们好吵啊！打扰我睡觉了。
-            [角色6]天天睡觉，睡死你得了！"""
-
-            gr.Examples(
-                examples=[[example_dialog]],
-                inputs=[dialog_text],
-                label="示例对话",
-                elem_id="anchor-examples",
-            )
+            # Create a temporary list for generated items
+            temp_list = create_temp_list()
 
     # Bind events
 
     # 每次 speaker 更新都要重新绑定。因为 list 不能作为 state，state 无法通过非交互方式刷新
     # 这是 Gradio 的一个弊端，只有交互了才可能改 state，事件绑定却发生在初始的列表渲染前，导致事件绑定都得放到列表渲染内部才能正常更新
-    def wrapped_load_preset_click(speaker_list: list):
-        load_preset_btn.click(
-            fn=on_load_preset_click,
-            inputs=[preset_dropdown, speaker_count],
-            outputs=[
-                # Speaker names
-                # Settings
-                interval,
-                gen_subtitle,
-                subtitle_model,
-                subtitle_lang,
-                bgm_volume,
-                bgm_loop,
-                # Advanced params
-                do_sample,
-                top_p,
-                top_k,
-                temperature,
-                length_penalty,
-                num_beams,
-                repetition_penalty,
-                max_mel_tokens,
-                *speaker_list,
-            ],
-        )
 
-    def wrapped_save_preset_click(speaker_list: list):
+    load_preset_btn.click(
+        fn=on_load_preset_click,
+        inputs=[preset_dropdown],
+        outputs=[
+            # Speaker names
+            # Settings
+            interval,
+            gen_subtitle,
+            subtitle_model,
+            subtitle_lang,
+            bgm_volume,
+            bgm_loop,
+            # Advanced params
+            do_sample,
+            top_p,
+            top_k,
+            temperature,
+            length_penalty,
+            num_beams,
+            repetition_penalty,
+            max_mel_tokens,
+            # Speaker Count State
+            speaker_count,
+            speakers_data,
+        ],
+    )
+
+    def wrapped_save_preset_click(
+        gr_speakers: list[gr.Component],
+    ):
         save_preset_btn.click(
             fn=on_save_preset_click,
             inputs=[
@@ -198,7 +230,7 @@ def create_multi_dialog_tab_page(
                 max_mel_tokens,
                 # Speaker names and audios
                 speaker_count,
-                *speaker_list,
+                *gr_speakers,
             ],
             outputs=[preset_dropdown],
         )
@@ -209,12 +241,9 @@ def create_multi_dialog_tab_page(
         outputs=[preset_dropdown],
     )
 
-    preset_dropdown.select(
-        fn=lambda: None,  # Do nothing on select, load button handles loading
-        outputs=[],
-    )
-
-    def wrapped_multi_gen_click(speaker_list: list):
+    def wrapped_multi_gen_click(
+        gr_speakers: list[gr.Component],
+    ):
         multi_gen_button.click(
             fn=lambda *args: gen_multi_dialog_audio(
                 tts_manager.get_tts(), subtitle_manager, *args
@@ -232,7 +261,55 @@ def create_multi_dialog_tab_page(
                 bgm_volume,
                 bgm_loop,
                 additional_bgm,
-                *speaker_list,
+                *gr_speakers,
             ],
-            outputs=[multi_output_audio, multi_subtitle_output],
+            outputs=[multi_output_audio, multi_subtitle_output, temp_list],
         )
+
+    open_output_folder.click(
+        on_open_output_folder_click,
+        inputs=[],
+        outputs=[],
+    )
+
+    add_role_btn.click(
+        fn=add_role,
+        inputs=[speakers_data, speaker_count],
+        outputs=[speakers_data, speaker_count],
+    )
+
+    remove_role_btn.click(
+        fn=remove_role,
+        inputs=[speakers_data, speaker_count],
+        outputs=[speakers_data, speaker_count],
+    )
+
+
+def on_open_output_folder_click():
+    """Open the output folder in the file explorer based on current working directory"""
+    output_dir = os.path.join(os.getcwd(), "outputs")
+    if os.path.exists(output_dir):
+        print(f"Open {output_dir}")
+        if os.name == "nt":
+            os.startfile(output_dir)
+        elif os.name == "posix":
+            import subprocess
+
+            subprocess.Popen(["xdg-open", output_dir])
+        else:
+            webbrowser.open(f"file://{output_dir}")
+    else:
+        print(f"Output directory {output_dir} does not exist.")
+
+
+def add_role(speakers_data, speaker_count):
+    speaker_count += 1
+    speakers_data.append((f"角色{speaker_count}", None))
+    return speakers_data, speaker_count
+
+
+def remove_role(speakers_data, speaker_count):
+    if len(speakers_data) > 1:
+        speakers_data = speakers_data[:-1]
+        speaker_count -= 1
+    return speakers_data, speaker_count

@@ -7,7 +7,7 @@ import gradio as gr
 
 def create_advanced_params_accordion(tts):
     """Create advanced parameters accordion"""
-    with gr.Accordion(open=False, label="高级参数", elem_id="advanced-params"):
+    with gr.Accordion(open=False, label="⚙️ 高级参数", elem_id="advanced-params"):
         with gr.Row():
             with gr.Column(scale=1):
                 gr.Markdown(
@@ -129,7 +129,7 @@ def create_advanced_params_accordion(tts):
 
 def create_bgm_accordion():
     """Create background music settings accordion"""
-    with gr.Accordion("背景音乐设置", open=False, elem_id="bgm-accordion"):
+    with gr.Accordion("🎵 背景音乐设置", open=False, elem_id="bgm-accordion"):
         bgm_upload = gr.Audio(
             label="背景音乐", sources=["upload"], type="filepath", interactive=True
         )
@@ -152,7 +152,7 @@ def create_bgm_accordion():
 def create_subtitle_controls():
     """Create subtitle generation controls"""
     with gr.Row(elem_id="subtitle-controls"):
-        gen_subtitle = gr.Checkbox(label="生成字幕文件", value=False)
+        gen_subtitle = gr.Checkbox(label="🎬 生成字幕文件", value=False)
         subtitle_model = gr.Dropdown(
             choices=["tiny", "base", "small", "medium"],
             value="base",

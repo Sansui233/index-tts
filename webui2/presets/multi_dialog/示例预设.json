@@ -1,11 +1,8 @@
 {
   "speakers": {
     "speaker1_name": "小明",
-    "speaker2_name": "小红", 
-    "speaker3_name": "小刚",
-    "speaker4_name": "小李",
-    "speaker5_name": "小王",
-    "speaker6_name": "小张"
+    "speaker2_name": "小红",
+    "speaker3_name": "小刚"
   },
   "settings": {
     "interval": 0.8,

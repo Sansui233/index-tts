@@ -1,6 +1,7 @@
 import os
 import time
 import traceback
+from pathlib import Path
 
 import gradio as gr
 import numpy as np
@@ -12,7 +13,7 @@ from webui2.utils.subtitle_manager import SubtitleManager
 
 
 def gen_audio(
-    tts: IndexTTS,
+    tts: IndexTTS | None,
     subtitle_manager: SubtitleManager,
     prompt,
     text,
@@ -23,8 +24,11 @@ def gen_audio(
     progress=gr.Progress(),
 ):
     """Handle single audio generation"""
+    if tts is None:
+        gr.Error("TTS model is not initialized")
+        return None, None
     try:
-        audio_output_path = os.path.join("outputs", f"spk_{int(time.time())}.wav")
+        audio_output_path = Path("outputs") / f"spk_{int(time.time())}.wav"
         tts.gr_progress = progress  # type: ignore
 
         (
@@ -59,7 +63,7 @@ def gen_audio(
 
         # Generate audio
         if infer_mode == "普通推理":
-            output = tts.infer(
+            _ = tts.infer(
                 prompt,
                 text,
                 audio_output_path,
@@ -68,7 +72,7 @@ def gen_audio(
                 **kwargs,
             )
         else:
-            output = tts.infer_fast(
+            _ = tts.infer_fast(
                 prompt,
                 text,
                 audio_output_path,
@@ -122,7 +126,7 @@ def gen_multi_dialog_audio(
 ):
     try:
         """Handle multi-dialog generation"""
-        temp_dir = "temp_dialog"
+        temp_dir = Path("outputs") / "temp_dialog"
         os.makedirs(temp_dir, exist_ok=True)
 
         if tts is None:
@@ -205,7 +209,7 @@ def gen_multi_dialog_audio(
 
         if not dialog_lines:
             progress(1.0, "未识别到有效对话")
-            return gr.update(value=None, visible=True), gr.update(visible=False)
+            return
 
         all_speakers = list(set([line["speaker"] for line in dialog_lines]))
         progress(0.2, f"识别到 {len(all_speakers)} 个角色: {', '.join(all_speakers)}")
@@ -213,10 +217,12 @@ def gen_multi_dialog_audio(
         for speaker in all_speakers:
             if speaker not in speakers:
                 progress(1.0, f"错误: 角色 '{speaker}' 没有对应的参考音频")
-                return gr.update(value=None, visible=True), gr.update(visible=False)
+                return
 
         # Generate audio for each dialog line
+        clean_temp_files(str(temp_dir))
         audio_segments = []
+        temp_files: list[tuple[str, str]] = []  # list of (text, audio_path)
         sr = None
 
         # TODO batch 合成
@@ -229,9 +235,7 @@ def gen_multi_dialog_audio(
                 f"生成 '{speaker}' 的对话 ({i + 1}/{len(dialog_lines)}): {text[:20]}...",
             )
 
-            audio_output_path = os.path.join(
-                temp_dir, f"{speaker}_{i}_{int(time.time())}.wav"
-            )
+            audio_output_path = str(temp_dir / f"{speaker}_{i}_{int(time.time())}.wav")
             tts.infer(
                 speakers[speaker], text, audio_output_path, verbose=True, **kwargs
             )
@@ -244,6 +248,7 @@ def gen_multi_dialog_audio(
             if i < len(dialog_lines) - 1:
                 silence = np.zeros(int(interval * sr), dtype=audio_data.dtype)
                 audio_segments.append(silence)
+            temp_files.append((text, audio_output_path))
 
         # Combine all audio segments
         progress(0.9, "正在合并对话音频...")
@@ -251,12 +256,6 @@ def gen_multi_dialog_audio(
 
         audio_output_path = os.path.join("outputs", f"dialog_{int(time.time())}.wav")
         wavfile.write(audio_output_path, sr, dialog_audio)
-
-        # Clean up temporary files
-        for file in os.listdir(temp_dir):
-            file_path = os.path.join(temp_dir, file)
-            if os.path.isfile(file_path):
-                os.remove(file_path)
 
         # Handle additional parameters
         gen_subtitle = args[8] if len(args) > 8 else True
@@ -288,10 +287,24 @@ def gen_multi_dialog_audio(
             )
             audio_output_path = mixed_output_path
 
-        return gr.update(value=audio_output_path, visible=True), gr.update(
-            value=subtitle_path, visible=bool(subtitle_path)
+        print(f"生成句子数： {len(temp_files)}")
+
+        return (
+            gr.update(value=audio_output_path, visible=True),
+            gr.update(value=subtitle_path, visible=bool(subtitle_path)),
+            temp_files,
         )
     except Exception as e:
         gr.Error(f"生成对话音频时发生错误: {str(e)}")
         traceback.print_exc()
         return None
+
+
+def clean_temp_files(temp_dir: str):
+    if not os.path.exists(temp_dir):
+        return
+    for file in os.listdir(temp_dir):
+        file_path = os.path.join(temp_dir, file)
+        if os.path.isfile(file_path):
+            os.remove(file_path)
+    print(f"已经清理临时文件夹 {temp_dir} 中的所有文件")

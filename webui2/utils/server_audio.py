@@ -76,7 +76,7 @@ class ServerAudioManager:
                 display_name = f"[{category}] {filename}"
                 choices.append((display_name, filepath))
 
-        print("[webui2] [Debug] Flattened audio choices:", len(choices), "items")
+        # print("[webui2] [Debug] Flattened audio choices:", len(choices), "items")
         return choices
 
     def is_server_audio(self, file_path: str) -> bool:

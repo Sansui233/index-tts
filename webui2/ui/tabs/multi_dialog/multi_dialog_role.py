@@ -5,13 +5,16 @@ import gradio as gr
 from webui2.utils import server_audio_manager
 
 
-def create_role(i=1):
+def create_role(i: int, speaker_data: tuple = (None, None)):
+    name, audioPath = speaker_data
+    if name is None:
+        name = f"角色{i}"
     with gr.Column(elem_classes="multi_dialog-roles"):
         with gr.Row(scale=1):
             gr_name = gr.Textbox(
                 label="角色名称",
-                key=f"speaker{i}_name",
-                value=f"角色{i}",
+                key=f"speaker{i}_{name}",
+                value=f"{name}",
                 interactive=True,
                 elem_classes=["multi_dialog-role_name"],
                 scale=1,
@@ -19,18 +22,20 @@ def create_role(i=1):
             )
             gr_server_audio = gr.Dropdown(
                 label="选择服务器音频",
-                key=f"speaker{i + 1}_server_audio",
+                key=f"speaker{i + 1}_{name}_server_audio",
                 choices=server_audio_manager.get_flat_audio_choices(),
-                value=None,
+                value=audioPath,
                 interactive=True,
                 allow_custom_value=False,
                 scale=2,
             )
         gr_audio = gr.Audio(
             label="参考音频",
-            key=f"speaker{i}_name_audio",
+            key=f"speaker{i}_{name}_audio",
             sources=["upload", "microphone"],
+            value=audioPath,
             type="filepath",
+            interactive=True,
         )
 
     gr_server_audio.change(
@@ -44,5 +49,5 @@ def load_server_audio(server_audio_path):
     """Load server audio file into the audio component"""
     if server_audio_path and os.path.exists(server_audio_path):
         print(f"[webui2] [Debug] Loading server audio: {server_audio_path}")
-        return gr.update(value=server_audio_path)
-    return gr.update()
+        return server_audio_path
+    return

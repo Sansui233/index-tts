@@ -125,7 +125,8 @@ def on_save_preset_click(
 def on_delete_preset_click(preset_name):
     """Handle deleting a preset"""
     if not preset_name:
-        return gr.update(value="❌ 请选择要删除的预设"), on_refresh_preset_list()
+        gr.Error("❌ 请选择要删除的预设")
+        return on_refresh_preset_list()
 
     success = preset_mgr.delete_preset(preset_name)
 
@@ -137,7 +138,7 @@ def on_delete_preset_click(preset_name):
     return on_refresh_preset_list()
 
 
-def on_load_preset_click(preset_name, speaker_count):
+def on_load_preset_click(preset_name):
     """Handle loading a preset"""
     if not preset_name:
         gr.Error("请选择一个预设")
@@ -151,36 +152,37 @@ def on_load_preset_click(preset_name, speaker_count):
         gr.Error("加载预设失败")
         return
 
-    config = flatten_preset_config(preset_data, speaker_count)
+    config, speaker_count = flatten_preset_config(preset_data)
+    speakers_data: list[tuple] = []
+    for i in range(speaker_count):
+        speakers_data.append(
+            (
+                config.get(f"speaker{i + 1}_name", f"角色{i + 1}"),
+                config.get(f"speaker{i + 1}_server_audio", None),
+            )
+        )
 
     # Return updates in the order of components
     result = []
     # Settings (6)
-    result.append(gr.update(value=config.get("interval", 0.5)))
-    result.append(gr.update(value=config.get("gen_subtitle_multi", True)))
-    result.append(gr.update(value=config.get("subtitle_model_multi", "base")))
-    result.append(gr.update(value=config.get("subtitle_lang_multi", "zh")))
-    result.append(gr.update(value=config.get("bgm_volume_multi", 0.3)))
-    result.append(gr.update(value=config.get("bgm_loop_multi", True)))
+    result.append(config.get("interval", 0.5))
+    result.append(config.get("gen_subtitle_multi", True))
+    result.append(config.get("subtitle_model_multi", "base"))
+    result.append(config.get("subtitle_lang_multi", "zh"))
+    result.append(config.get("bgm_volume_multi", 0.3))
+    result.append(config.get("bgm_loop_multi", True))
 
     # Advanced params (8)
-    result.append(gr.update(value=config.get("do_sample", True)))
-    result.append(gr.update(value=config.get("top_p", 0.8)))
-    result.append(gr.update(value=config.get("top_k", 30)))
-    result.append(gr.update(value=config.get("temperature", 1.0)))
-    result.append(gr.update(value=config.get("length_penalty", 0.0)))
-    result.append(gr.update(value=config.get("num_beams", 3)))
-    result.append(gr.update(value=config.get("repetition_penalty", 10.0)))
-    result.append(gr.update(value=config.get("max_mel_tokens", 600)))
+    result.append(config.get("do_sample", True))
+    result.append(config.get("top_p", 0.8))
+    result.append(config.get("top_k", 30))
+    result.append(config.get("temperature", 1.0))
+    result.append(config.get("length_penalty", 0.0))
+    result.append(config.get("num_beams", 3))
+    result.append(config.get("repetition_penalty", 10.0))
+    result.append(config.get("max_mel_tokens", 600))
 
-    for i in range(speaker_count):
-        # Speaker names
-        key = f"speaker{i + 1}_name"
-        result.append(gr.update(value=config.get(key, f"角色{i + 1}")))
-        # Server audio dropdowns
-        key = f"speaker{i + 1}_server_audio"
-        result.append(gr.update(value=config.get(key, None)))
-        # Server audio Blobs. Set to None, updated by gr_server_audio.change
-        result.append(None)
+    result.append(speaker_count)
+    result.append(speakers_data)
 
     return result

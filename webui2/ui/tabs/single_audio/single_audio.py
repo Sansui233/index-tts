@@ -3,6 +3,7 @@ Single audio generation tab
 """
 
 import os
+import webbrowser
 
 import gradio as gr
 
@@ -61,15 +62,24 @@ def create_single_audio_tab_page(
                     visible=True,
                     key="output_audio",
                     elem_id="output-audio",
+                    scale=2,
                 )
                 subtitle_output = gr.File(
-                    label="字幕", visible=True, elem_id="output-subtitle"
+                    label="字幕", visible=True, elem_id="output-subtitle", scale=2
                 )
                 gen_button = gr.Button(
                     "生成语音",
                     key="gen_button",
                     interactive=True,
                     elem_classes=["flex-auto", "bg-accent"],
+                    min_width=150,
+                )
+                open_output_folder = gr.Button(
+                    "打开输出目录",
+                    key="open_output_folder",
+                    interactive=True,
+                    elem_classes=["flex-auto"],
+                    min_width=150,
                 )
 
             gen_subtitle, subtitle_model, subtitle_lang = create_subtitle_controls()
@@ -100,7 +110,7 @@ def create_single_audio_tab_page(
 
     # bind events
     gen_button.click(
-        fn=lambda *args: gen_audio(tts_manager.get_tts(), subtitle_manager, *args),
+        fn=lambda *args: gen_audio(tts_manager.get_tts(), subtitle_manager, *args),  # noqa
         inputs=[
             prompt_audio,
             input_text_single,
@@ -118,6 +128,9 @@ def create_single_audio_tab_page(
         ],
         outputs=[output_audio, subtitle_output],
     )
+
+    open_output_folder.click(on_open_output_folder_click, inputs=[], outputs=[])
+
     max_text_tokens_per_sentence.change(
         fn=lambda text, max_tokens: on_input_text_change(
             tts_manager.get_tts(), text, max_tokens
@@ -150,3 +163,20 @@ def on_input_text_change(tts, text: str, max_tokens_per_sentence: str):
         return gr.update(value=data, visible=True, type="array")
     else:
         return gr.update(value=[])
+
+
+def on_open_output_folder_click():
+    """Open the output folder in the file explorer based on current working directory"""
+    output_dir = os.path.join(os.getcwd(), "outputs")
+    if os.path.exists(output_dir):
+        print(f"Open {output_dir}")
+        if os.name == "nt":
+            os.startfile(output_dir)
+        elif os.name == "posix":
+            import subprocess
+
+            subprocess.Popen(["xdg-open", output_dir])
+        else:
+            webbrowser.open(f"file://{output_dir}")
+    else:
+        print(f"Output directory {output_dir} does not exist.")

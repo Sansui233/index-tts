@@ -5,9 +5,13 @@
     "speaker2_name": "角色2",
     "speaker2_audio": "samples/example1.wav",
     "speaker3_name": "角色3",
+    "speaker3_audio": "samples/example1.wav",
     "speaker4_name": "角色4",
+    "speaker4_audio": "samples/example1.wav",
     "speaker5_name": "角色5",
-    "speaker6_name": "角色6"
+    "speaker5_audio": "samples/example1.wav",
+    "speaker6_name": "角色6",
+    "speaker6_audio": "samples/example1.wav"
   },
   "settings": {
     "interval": 0.5,

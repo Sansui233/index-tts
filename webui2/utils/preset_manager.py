@@ -139,34 +139,36 @@ def collect_preset_data(
     return preset_data
 
 
-def flatten_preset_config(
-    preset_data: Dict[str, Any], speaker_count: int
-) -> Dict[str, Any]:
+def flatten_preset_config(preset_data: Dict[str, Any]) -> tuple[Dict[str, Any], int]:
     """Convert preset data to gradio update format
     由于 gradio output 是 flat list
     返回一个展平的 dict 映射
     使用 result.get("key") 可以 return None
     以满足 json 文件可以是 optional，同时输出到 gradio output 的需要有值
     """
-    updates = {}
+    flat_config = {}
 
     # flatten speaker names and audio paths
     speakers = preset_data.get("speakers", {})
-    for i in range(1, speaker_count + 1):
+    len_speakers = 0
+    for i in range(1, 50):
         speaker_name_key = f"speaker{i}_name"
         speaker_audio_key = f"speaker{i}_audio"
 
         if speaker_name_key in speakers:
-            updates[speaker_name_key] = speakers[speaker_name_key]
+            flat_config[speaker_name_key] = speakers[speaker_name_key]
+            len_speakers += 1
+        else:
+            continue
 
         # Handle server audio paths - use the same key for server audio dropdown
         if speaker_audio_key in speakers:
             server_audio_path = speakers[speaker_audio_key]
             if server_audio_path and os.path.exists(server_audio_path):
                 # Update the server audio dropdown with the path
-                updates[f"speaker{i}_server_audio"] = server_audio_path
+                flat_config[f"speaker{i}_server_audio"] = server_audio_path
                 # Also set the audio component to the server file
-                updates[speaker_audio_key] = server_audio_path
+                flat_config[speaker_audio_key] = server_audio_path
 
     # flatten settings
     settings = preset_data.get("settings", {})
@@ -181,7 +183,7 @@ def flatten_preset_config(
 
     for preset_key, component_key in settings_mapping.items():
         if preset_key in settings:
-            updates[component_key] = settings[preset_key]
+            flat_config[component_key] = settings[preset_key]
 
     # Apply advanced parameters
     advanced = preset_data.get("advanced_params", {})
@@ -198,6 +200,6 @@ def flatten_preset_config(
 
     for param_name in param_names:
         if param_name in advanced:
-            updates[param_name] = advanced[param_name]
+            flat_config[param_name] = advanced[param_name]
 
-    return updates
+    return flat_config, len_speakers
