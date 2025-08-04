@@ -10,23 +10,41 @@ from tools.i18n.i18n import I18nAuto
 
 
 class TTSManager:
-    """TTS Engine manager with caching and configuration"""
+    """TTS Engine manager(Singleton) with caching and configuration"""
 
     _instance = None
+    _initialized = False
 
-    def __new__(cls, *args, **kwargs):
+    def __new__(cls, model_dir=None, cfg_path=None):
         if cls._instance is None:
-            cls._instance = super(TTSManager, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, model_dir, cfg_path):
-        self.model_dir = model_dir
-        self.cfg_path = cfg_path
-        self.tts = None
-        self.i18n = I18nAuto(language="zh_CN")
-        self.example_cases = []
-        self._load_tts()
-        self._load_examples()
+    def __init__(self, model_dir=None, cfg_path=None):
+        if not self.__class__._initialized:
+            if model_dir is None or cfg_path is None:
+                raise ValueError(
+                    "index-tts model_dir and cfg_path must be provided on first initialization"
+                )
+            self.model_dir = model_dir
+            self.cfg_path = cfg_path
+            self.tts = None
+            self.i18n = I18nAuto(language="zh_CN")
+            self.example_cases = []
+            self._load_tts()
+            self._load_examples()
+            self.__class__._initialized = True
+            print(
+                f"TTSManager initialized with model_dir: {self.model_dir}, cfg_path: {self.cfg_path}"
+            )
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            raise RuntimeError(
+                "TTSManager is not initialized. Call TTSManager(model_dir, cfg_path) first."
+            )
+        return cls._instance
 
     def _load_tts(self):
         """Initialize TTS engine"""

@@ -117,7 +117,6 @@ def collect_preset_data(
             audio_path = audio_data.get(f"speaker{i}_audio")
             if audio_path and server_audio_manager.is_server_audio(audio_path):
                 relative_path = server_audio_manager.get_relative_path(audio_path)
-                print("[webui2] [Debug] save format2:", relative_path)
                 preset_data["speakers"][f"speaker{i}_audio"] = relative_path
 
     # Collect advanced parameters
@@ -165,10 +164,9 @@ def flatten_preset_config(preset_data: Dict[str, Any]) -> tuple[Dict[str, Any], 
         if speaker_audio_key in speakers:
             server_audio_path = speakers[speaker_audio_key]
             if server_audio_path and os.path.exists(server_audio_path):
-                # Update the server audio dropdown with the path
-                flat_config[f"speaker{i}_server_audio"] = server_audio_path
-                # Also set the audio component to the server file
                 flat_config[speaker_audio_key] = server_audio_path
+            else:
+                flat_config[speaker_audio_key] = None
 
     # flatten settings
     settings = preset_data.get("settings", {})

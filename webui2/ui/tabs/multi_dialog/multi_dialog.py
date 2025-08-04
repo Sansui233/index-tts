@@ -4,8 +4,10 @@ Multi-dialog generation tab
 
 import os
 import webbrowser
+from typing import Callable
 
 import gradio as gr
+from gradio.components.state import State
 
 from webui2.ui.common import (
     create_advanced_params_accordion,
@@ -14,6 +16,7 @@ from webui2.ui.common import (
 )
 from webui2.ui.handlers.generate import (
     gen_multi_dialog_audio,
+    regenerate_single,
 )
 from webui2.ui.tabs.multi_dialog.multi_dialog_templist import create_temp_list
 from webui2.utils import SubtitleManager, TTSManager
@@ -27,9 +30,10 @@ from .multi_dialog_presets import (
 from .multi_dialog_role import create_role
 
 
-def create_multi_dialog_tab_page(
-    tts_manager: TTSManager, subtitle_manager: SubtitleManager
-):
+def create_multi_dialog_tab_page():
+    tts_manager = TTSManager.get_instance()
+    subtitle_manager = SubtitleManager.get_instance()
+
     """Create the multi-dialog generation tab"""
 
     with gr.Row(elem_id="multi-dialog"):
@@ -62,16 +66,14 @@ def create_multi_dialog_tab_page(
 
             # speaker_count 其实必须和 speaker_data 同步
             # save_preset_btn 和 multi_gen_button 都单独需要 speaker_data
-            speaker_count = gr.State(2)
-            speakers_data = gr.State(
+            st_speaker_count = gr.State(2)
+            st_speakers_data = gr.State(
                 [("角色1", None), ("角色2", None)]
             )  # List of (Name, AudioPathOnServer)
 
-            @gr.render(inputs=(speakers_data))
+            @gr.render(inputs=(st_speakers_data))
             def render_roles(speakers_data: list[tuple]):
                 gr_speakers = []  # length: count * 3, tuple[Textbox, Dropdown, Audio]
-                if len(gr_speakers) > len(speakers_data) * 3:
-                    gr_speakers = gr_speakers[: len(speakers_data) * 3]
 
                 for i in range(0, len(speakers_data), 2):  # 布局控制2个一行
                     with gr.Row():
@@ -79,8 +81,8 @@ def create_multi_dialog_tab_page(
                         if i + 1 < len(speakers_data):
                             gr_speakers.extend(create_role(i + 2, speakers_data[i + 1]))  # fmt:off
 
-                wrapped_save_preset_click(gr_speakers)  # as handler input
-                wrapped_multi_gen_click(gr_speakers)  # as handler input
+                bind_save_preset_click(gr_speakers)
+                bind_multi_gen_click(gr_speakers)
 
             # Add and Remove Role Buttons
             with gr.Row():
@@ -170,14 +172,22 @@ def create_multi_dialog_tab_page(
                 repetition_penalty, max_mel_tokens,
             ]  # fmt: skip
 
+            pick_args = [
+                st_speakers_data,
+                do_sample,
+                top_p,
+                top_k,
+                temperature,
+                length_penalty,
+                num_beams,
+                repetition_penalty,
+                max_mel_tokens,
+            ]
+
             # Create a temporary list for generated items
-            temp_list = create_temp_list()
+            st_temp_list = create_temp_list(pick_args)
 
     # Bind events
-
-    # 每次 speaker 更新都要重新绑定。因为 list 不能作为 state，state 无法通过非交互方式刷新
-    # 这是 Gradio 的一个弊端，只有交互了才可能改 state，事件绑定却发生在初始的列表渲染前，导致事件绑定都得放到列表渲染内部才能正常更新
-
     load_preset_btn.click(
         fn=on_load_preset_click,
         inputs=[preset_dropdown],
@@ -200,14 +210,12 @@ def create_multi_dialog_tab_page(
             repetition_penalty,
             max_mel_tokens,
             # Speaker Count State
-            speaker_count,
-            speakers_data,
+            st_speaker_count,
+            st_speakers_data,
         ],
     )
 
-    def wrapped_save_preset_click(
-        gr_speakers: list[gr.Component],
-    ):
+    def bind_save_preset_click(gr_speakers: list[gr.Component]):
         save_preset_btn.click(
             fn=on_save_preset_click,
             inputs=[
@@ -229,7 +237,7 @@ def create_multi_dialog_tab_page(
                 repetition_penalty,
                 max_mel_tokens,
                 # Speaker names and audios
-                speaker_count,
+                st_speaker_count,
                 *gr_speakers,
             ],
             outputs=[preset_dropdown],
@@ -241,15 +249,13 @@ def create_multi_dialog_tab_page(
         outputs=[preset_dropdown],
     )
 
-    def wrapped_multi_gen_click(
-        gr_speakers: list[gr.Component],
-    ):
+    def bind_multi_gen_click(gr_speakers: list[gr.Component]):
         multi_gen_button.click(
             fn=lambda *args: gen_multi_dialog_audio(
                 tts_manager.get_tts(), subtitle_manager, *args
             ),
             inputs=[
-                speaker_count,
+                st_speaker_count,
                 dialog_text,
                 interval,
                 # Advanced params from the tab
@@ -263,7 +269,7 @@ def create_multi_dialog_tab_page(
                 additional_bgm,
                 *gr_speakers,
             ],
-            outputs=[multi_output_audio, multi_subtitle_output, temp_list],
+            outputs=[multi_output_audio, multi_subtitle_output, st_temp_list],
         )
 
     open_output_folder.click(
@@ -274,14 +280,14 @@ def create_multi_dialog_tab_page(
 
     add_role_btn.click(
         fn=add_role,
-        inputs=[speakers_data, speaker_count],
-        outputs=[speakers_data, speaker_count],
+        inputs=[st_speakers_data, st_speaker_count],
+        outputs=[st_speakers_data, st_speaker_count],
     )
 
     remove_role_btn.click(
         fn=remove_role,
-        inputs=[speakers_data, speaker_count],
-        outputs=[speakers_data, speaker_count],
+        inputs=[st_speakers_data, st_speaker_count],
+        outputs=[st_speakers_data, st_speaker_count],
     )
 
 
@@ -313,3 +319,38 @@ def remove_role(speakers_data, speaker_count):
         speakers_data = speakers_data[:-1]
         speaker_count -= 1
     return speakers_data, speaker_count
+
+
+def bind_regenerate_single(
+    infer_mode,
+    do_sample,
+    top_p,
+    top_k,
+    temperature,
+    length_penalty,
+    num_beams,
+    repetition_penalty,
+    max_mel_tokens,
+    st_gr_speakers: State,
+    max_text_tokens_per_sentence=120,
+    sentences_bucket_max_size=4,
+    progress=gr.Progress(),
+) -> Callable:
+    def wrapper(text, audio_output_path, temp_files):
+        gr_speakers_list = st_gr_speakers.value
+        print(
+            f"[webui][Debug] bind regen buttons {text}\n"
+            + f"with {len(st_gr_speakers.value) / 3} speakers "
+            + f"and {len(temp_files)} items in temp_list:"
+        )
+        return regenerate_single(
+            text,audio_output_path,temp_files,
+            infer_mode,
+            do_sample, top_p, top_k, temperature,
+            length_penalty, num_beams, repetition_penalty, max_mel_tokens,
+            max_text_tokens_per_sentence, sentences_bucket_max_size,
+            *gr_speakers_list,
+            progress=progress,
+        )  # fmt: skip
+
+    return wrapper

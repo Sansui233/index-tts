@@ -22,8 +22,8 @@ def create_role(i: int, speaker_data: tuple = (None, None)):
             )
             gr_server_audio = gr.Dropdown(
                 label="选择服务器音频",
-                key=f"speaker{i + 1}_{name}_server_audio",
                 choices=server_audio_manager.get_flat_audio_choices(),
+                key=f"speaker{i}_select_{audioPath}",
                 value=audioPath,
                 interactive=True,
                 allow_custom_value=False,
@@ -31,8 +31,8 @@ def create_role(i: int, speaker_data: tuple = (None, None)):
             )
         gr_audio = gr.Audio(
             label="参考音频",
-            key=f"speaker{i}_{name}_audio",
             sources=["upload", "microphone"],
+            key=f"speaker{i}_wav_{audioPath}",
             value=audioPath,
             type="filepath",
             interactive=True,

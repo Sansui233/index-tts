@@ -16,9 +16,10 @@ from webui2.ui.handlers.generate import gen_audio
 from webui2.utils import SubtitleManager, TTSManager
 
 
-def create_single_audio_tab_page(
-    tts_manager: TTSManager, subtitle_manager: SubtitleManager
-):
+def create_single_audio_tab_page():
+    tts_manager = TTSManager.get_instance()
+    subtitle_manager = SubtitleManager.get_instance()
+
     """Create the single audio generation tab"""
     with gr.Row(elem_id="single-audio"):
         # navigation section

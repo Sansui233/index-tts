@@ -14,7 +14,7 @@ from transformers import pipeline
 
 
 class SubtitleManager:
-    """Manages subtitle generation with different models"""
+    """(Singleton) Manages subtitle generation with different models"""
 
     _instance = None
 
@@ -25,6 +25,12 @@ class SubtitleManager:
 
     def __init__(self):
         self.generator = AudioSubtitleGenerator()
+
+    @classmethod
+    def get_instance(cls):
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
 
     def generate_subtitles(
         self,

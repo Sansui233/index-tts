@@ -8,8 +8,10 @@ import traceback
 from pydub import AudioSegment
 
 
-def mix_audio_with_bgm(voice_path, bgm_paths, volume=0.3, loop=True):
-    """混合语音和背景音乐"""
+def mix_audio_with_bgm(voice_path: str, bgm_paths: list[str], volume=0.3, loop=True):
+    """混合语音和背景音乐
+    bgm_paths 为 [] 时，返回原始语音路径
+    """
     try:
         voice = AudioSegment.from_file(voice_path)
 

@@ -41,7 +41,7 @@ cmd_args = parse_arguments()
 validate_model_files(cmd_args.model_dir)
 setup_directories()
 
-# Initialize managers
+# Initialize singleton managers
 tts_mgr = TTSManager(
     cmd_args.model_dir, os.path.join(cmd_args.model_dir, "config.yaml")
 )
@@ -56,11 +56,11 @@ def create_webui():
     ) as demo:
         create_header()
         with gr.Tab("音频生成"):
-            create_single_audio_tab_page(tts_mgr, subtitle_mgr)
+            create_single_audio_tab_page()
         with gr.Tab("多人对话"):
-            create_multi_dialog_tab_page(tts_mgr, subtitle_mgr)
+            create_multi_dialog_tab_page()
         with gr.Tab("单独生成字幕"):
-            create_subtitle_only_tab_page(subtitle_mgr)
+            create_subtitle_only_tab_page()
 
         # Gradio 这版本有 bug，首页不渲染个 Textbox 导致后面的 Textbox 渲染不出来
         gr.Textbox(label="444", visible=True, lines=1, elem_classes="display-none")

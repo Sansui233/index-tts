@@ -158,7 +158,7 @@ def on_load_preset_click(preset_name):
         speakers_data.append(
             (
                 config.get(f"speaker{i + 1}_name", f"角色{i + 1}"),
-                config.get(f"speaker{i + 1}_server_audio", None),
+                config.get(f"speaker{i + 1}_audio", None),
             )
         )
 

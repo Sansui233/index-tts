@@ -10,6 +10,7 @@ from scipy.io import wavfile
 from indextts.infer import IndexTTS
 from webui2.utils import mix_audio_with_bgm
 from webui2.utils.subtitle_manager import SubtitleManager
+from webui2.utils.tts_manager import TTSManager
 
 
 def gen_audio(
@@ -83,25 +84,14 @@ def gen_audio(
             )
 
         # Generate subtitle
-        subtitle_path = None
-        if gen_subtitle:
-            subtitle_path = subtitle_manager.generate_subtitles(
-                audio_output_path, subtitle_model, subtitle_lang
-            )
-
-        # Mix with background music
-        bgm_paths = []
-        if bgm_path:
-            bgm_paths.append(bgm_path)
-        if additional_bgm is not None:
-            for file in additional_bgm:
-                bgm_paths.append(file.name)
-
-        if bgm_paths:
-            mixed_output_path = mix_audio_with_bgm(
-                audio_output_path, bgm_paths, volume=bgm_volume, loop=bgm_loop
-            )
-            audio_output_path = mixed_output_path
+        subtitle_path = (
+            gen_subtitle_srt(str(audio_output_path), subtitle_model, subtitle_lang)
+            if gen_subtitle
+            else None
+        )
+        audio_output_path = gen_audio_with_bgm(
+            str(audio_output_path), bgm_path, additional_bgm, bgm_volume, bgm_loop
+        )
 
         return gr.update(value=audio_output_path, visible=True), gr.update(
             value=subtitle_path, visible=bool(subtitle_path)
@@ -169,61 +159,20 @@ def gen_multi_dialog_audio(
         }
 
         # Parse speaker inputs into Dict<name, audio_name, audio_blob>
-        speaker_in_param = (
+        gr_speakers = (
             args[-speaker_count * 3 :] if len(args) >= speaker_count * 3 else []
         )
-        speaker_pairs = np.array(speaker_in_param).reshape(speaker_count, 3)
+        speaker_pairs = np.array(gr_speakers).reshape(-1, 3)
         speakers = {name: audio for [name, audio, _] in speaker_pairs}
 
         # Parse dialog text
-        progress(0.1, "正在解析对话文本...")
-        dialog_lines = []
-        current_speaker = None
-        current_text = []
-
-        for line in dialog_text.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-
-            if line.startswith("[") and "]" in line:
-                if current_speaker and current_text:
-                    dialog_lines.append(
-                        {"speaker": current_speaker, "text": " ".join(current_text)}
-                    )
-                    current_text = []
-
-                end_index = line.index("]")
-                current_speaker = line[1:end_index].strip()
-                remaining_text = line[end_index + 1 :].strip()
-
-                if remaining_text:
-                    current_text.append(remaining_text)
-            elif current_speaker:
-                current_text.append(line)
-
-        if current_speaker and current_text:
-            dialog_lines.append(
-                {"speaker": current_speaker, "text": " ".join(current_text)}
-            )
-
-        if not dialog_lines:
-            progress(1.0, "未识别到有效对话")
-            return
-
-        all_speakers = list(set([line["speaker"] for line in dialog_lines]))
-        progress(0.2, f"识别到 {len(all_speakers)} 个角色: {', '.join(all_speakers)}")
-
-        for speaker in all_speakers:
-            if speaker not in speakers:
-                progress(1.0, f"错误: 角色 '{speaker}' 没有对应的参考音频")
-                return
+        dialog_lines = parse_dialogs(dialog_text, speakers, progress)
 
         # Generate audio for each dialog line
         clean_temp_files(str(temp_dir))
         audio_segments = []
         temp_files: list[tuple[str, str]] = []  # list of (text, audio_path)
-        sr = None
+        sample_rate = None
 
         # TODO batch 合成
         for i, line in enumerate(dialog_lines):
@@ -234,60 +183,49 @@ def gen_multi_dialog_audio(
                 0.3 + 0.6 * i / len(dialog_lines),
                 f"生成 '{speaker}' 的对话 ({i + 1}/{len(dialog_lines)}): {text[:20]}...",
             )
+            print(f"[webui2][Info] No.{i}\t正在生成 '{speaker}' 的对话: {text[:20]}...")
 
             audio_output_path = str(temp_dir / f"{speaker}_{i}_{int(time.time())}.wav")
             tts.infer(
-                speakers[speaker], text, audio_output_path, verbose=True, **kwargs
+                speakers[speaker], text, audio_output_path, verbose=False, **kwargs
             )
 
             sample_rate, audio_data = wavfile.read(audio_output_path)
-            sr = sample_rate
 
             audio_segments.append(audio_data)
 
             if i < len(dialog_lines) - 1:
-                silence = np.zeros(int(interval * sr), dtype=audio_data.dtype)
+                silence = np.zeros(int(interval * sample_rate), dtype=audio_data.dtype)
                 audio_segments.append(silence)
-            temp_files.append((text, audio_output_path))
+            temp_files.append((f"[{speaker}] {text}", audio_output_path))
 
         # Combine all audio segments
         progress(0.9, "正在合并对话音频...")
         dialog_audio = np.concatenate(audio_segments)
 
         audio_output_path = os.path.join("outputs", f"dialog_{int(time.time())}.wav")
-        wavfile.write(audio_output_path, sr, dialog_audio)
+        wavfile.write(audio_output_path, sample_rate, dialog_audio)
 
         # Handle additional parameters
         gen_subtitle = args[8] if len(args) > 8 else True
         subtitle_model = args[9] if len(args) > 9 else "base"
-        subtitle_lang = args[10] if len(args) > 10 else "zh (中文)"
+        subtitle_lang = args[10] if len(args) > 10 else "zh"
         bgm_path = args[11] if len(args) > 11 else None
         bgm_volume = args[12] if len(args) > 12 else 0.3
         bgm_loop = args[13] if len(args) > 13 else True
         additional_bgm = args[14] if len(args) > 14 else []
 
         # Generate subtitle
-        subtitle_path = None
-        if gen_subtitle:
-            subtitle_path = subtitle_manager.generate_subtitles(
-                audio_output_path, subtitle_model, subtitle_lang
-            )
+        subtitle_path = (
+            gen_subtitle_srt(audio_output_path, subtitle_model, subtitle_lang)
+            if gen_subtitle
+            else None
+        )
 
         # Mix with background music
-        bgm_paths = []
-        if bgm_path:
-            bgm_paths.append(bgm_path)
-        if additional_bgm is not None:
-            for file in additional_bgm:
-                bgm_paths.append(file.name)
-
-        if bgm_paths:
-            mixed_output_path = mix_audio_with_bgm(
-                audio_output_path, bgm_paths, volume=bgm_volume, loop=bgm_loop
-            )
-            audio_output_path = mixed_output_path
-
-        print(f"生成句子数： {len(temp_files)}")
+        audio_output_path = gen_audio_with_bgm(
+            audio_output_path, bgm_path, additional_bgm, bgm_volume, bgm_loop
+        )
 
         return (
             gr.update(value=audio_output_path, visible=True),
@@ -300,6 +238,40 @@ def gen_multi_dialog_audio(
         return None
 
 
+def gen_subtitle_srt(
+    audio_output_path: str, subtitle_model, subtitle_lang
+) -> str | None:
+    """
+    Return subtitle file path
+    """
+    subtitle_mgr = SubtitleManager().get_instance()
+    return subtitle_mgr.generate_subtitles(
+        audio_output_path, subtitle_model, subtitle_lang
+    )
+
+
+def gen_audio_with_bgm(
+    audio_output_path: str,
+    bgm_path: str | None,
+    additional_bgm: list | None,
+    bgm_volume: float,
+    bgm_loop: bool,
+) -> str:
+    """
+    Return audio path with background music mixed.
+    if both bgm_path and additional_bgm are None, return audio_output_path.
+    """
+    bgm_paths = []
+    if bgm_path:
+        bgm_paths.append(bgm_path)
+    if additional_bgm is not None:
+        for file in additional_bgm:
+            bgm_paths.append(file.name)
+    return mix_audio_with_bgm(
+        str(audio_output_path), bgm_paths, volume=bgm_volume, loop=bgm_loop
+    )
+
+
 def clean_temp_files(temp_dir: str):
     if not os.path.exists(temp_dir):
         return
@@ -308,3 +280,150 @@ def clean_temp_files(temp_dir: str):
         if os.path.isfile(file_path):
             os.remove(file_path)
     print(f"已经清理临时文件夹 {temp_dir} 中的所有文件")
+
+
+def regenerate_single(
+    # from button
+    text: str,
+    audio_output_path: str,
+    temp_list: list[tuple[str, str]],  # gr.Component
+    # from multi_dialog
+    speakers_data,  # list of gr.Component
+    infer_mode: str,  # gr.Component
+    do_sample,  # gr.Component
+    top_p,  # gr.Component
+    top_k,  # gr.Component
+    temperature,  # gr.Component
+    length_penalty,  # gr.Component
+    num_beams,  # gr.Component
+    repetition_penalty,  # gr.Component
+    max_mel_tokens,  # gr.Component
+    max_text_tokens_per_sentence=120,  # gr.Component
+    sentences_bucket_max_size=4,  # gr.Component
+    # internal
+    progress=gr.Progress(),
+) -> list[tuple[str, str]] | None:
+    tts = TTSManager.get_instance().get_tts()
+    if tts is None:
+        gr.Error("TTS model is not initialized")
+        return
+    if temp_list is None:
+        temp_list = []
+
+    # new audio_output_path is like "outputs/temp_dialog/spk_1234567890.wav"
+    # replace the timestamp with the current time
+    parts = audio_output_path.split("_")
+    parts[-1] = f"{int(time.time())}.wav"
+    new_output_path = "_".join(parts)
+
+    try:
+        tts.gr_progress = progress  # type: ignore
+
+        kwargs = {
+            "do_sample": bool(do_sample),
+            "top_p": float(top_p),
+            "top_k": int(top_k) if int(top_k) > 0 else None,
+            "temperature": float(temperature),
+            "length_penalty": float(length_penalty),
+            "num_beams": num_beams,
+            "repetition_penalty": float(repetition_penalty),
+            "max_mel_tokens": int(max_mel_tokens),
+        }
+
+        speaker, text = extract_speaker_and_text(text)
+        if speaker == "":
+            gr.Error("对话文本中没有指定角色，请使用 [角色名] 文本 的格式")
+            return
+
+        # speakers_data: list of (speaker, audio_path)
+        speakers = {name: audio for (name, audio) in speakers_data}
+
+        # Regenerate audio
+        if infer_mode == "普通推理":
+            _ = tts.infer(
+                speakers[speaker],
+                text,
+                new_output_path,
+                # verbose=True,  # cmd_args.verbose
+                max_text_tokens_per_sentence=int(max_text_tokens_per_sentence),
+                **kwargs,
+            )
+        else:
+            _ = tts.infer_fast(
+                speakers[speaker],
+                text,
+                new_output_path,
+                # verbose=True,  # cmd_args.verbose
+                max_text_tokens_per_sentence=int(max_text_tokens_per_sentence),
+                sentences_bucket_max_size=sentences_bucket_max_size,
+                **kwargs,
+            )
+
+        # find the index of audio_output_path in temp_files
+        # the temp_files is a list of (text, audio_path)
+        # clone temp_files and replace the audio_path that matches audio_output_path with new_output_path
+        updated_temp_files = []
+        for t, a_path in temp_list:
+            if a_path == audio_output_path:
+                updated_temp_files.append((t, new_output_path))
+            else:
+                updated_temp_files.append((t, a_path))
+        return updated_temp_files
+
+    except Exception as e:
+        gr.Error(f"生成音频时发生错误: {str(e)}")
+        traceback.print_exc()
+        return
+
+
+def parse_dialogs(
+    dialog_text: str, gr_speakers, progress: gr.Progress
+) -> list[dict[str, str]]:
+    progress(0.1, "正在解析对话文本...")
+    dialog_lines: list[dict[str, str]] = []
+
+    for line in dialog_text.split("\n"):
+        line = line.strip()
+        print(f"[webui2][Debug] 处理行: {line}")
+        if not line:
+            continue
+
+        if line.startswith("[") and "]" in line:
+            speaker, text = extract_speaker_and_text(line)
+            if dialog_lines and dialog_lines[-1]["speaker"] == speaker:
+                dialog_lines[-1]["text"] += " " + text
+            else:
+                dialog_lines.append({"speaker": speaker, "text": text})
+        else:
+            _, text = extract_speaker_and_text(line)
+            if text:
+                if dialog_lines:
+                    dialog_lines[-1]["text"] += " " + text
+                else:
+                    print(f"[webui2][Debug] 忽略行：无角色: {text}")
+
+    if not dialog_lines:
+        progress(1.0, "未识别到有效对话")
+        raise ValueError("未识别到有效对话")
+
+    text_speakers = list(set([line["speaker"] for line in dialog_lines]))
+    progress(0.2, f"识别到 {len(text_speakers)} 个角色: {', '.join(text_speakers)}")
+    print(f"[webui2][Info] 识别到 {len(text_speakers)} 个角色: {', '.join(text_speakers)}")  # fmt:skip
+
+    for speaker in text_speakers:
+        if speaker not in gr_speakers:
+            progress(1.0, f"错误: 角色 '{speaker}' 没有对应的参考音频")
+            raise ValueError(f"角色 '{speaker}' 没有对应的参考音频")
+
+    return dialog_lines
+
+
+def extract_speaker_and_text(line: str) -> tuple[str, str]:
+    """Extract speaker and text from a dialog line"""
+    if "[" in line and "]" in line:
+        start_index = line.index("[") + 1
+        end_index = line.index("]")
+        speaker = line[start_index:end_index].strip()
+        text = line[end_index + 1 :].strip()
+        return speaker, text
+    return "", line.strip()
