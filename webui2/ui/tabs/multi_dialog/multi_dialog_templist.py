@@ -1,11 +1,12 @@
 import gradio as gr
 
 from webui2.ui.handlers.generate import (
+    merge_from_temp_files,
     regenerate_single,
 )
 
 
-def create_temp_list(pick_args: list[gr.Component]):
+def create_temp_list(pick_args: list[gr.Component], output_audio: gr.Audio):
     """
     clickhandler:
         (text, audio_output_path, temp_files) -> temp_files
@@ -50,29 +51,44 @@ def create_temp_list(pick_args: list[gr.Component]):
                     with gr.Row(scale=1):
                         (text, audio_path) = temp_list[i]
                         with gr.Column():
-                            gr.Textbox(
+                            text_box = gr.Textbox(
                                 value=text, label=f"句子 {i + 1}", interactive=True
                             )
                             re_btn = gr.Button(value="重新生成")
+
+                            text_box.blur(
+                                fn=update_textbox(i),
+                                inputs=[text_box, st_temp_list],
+                                outputs=st_temp_list,
+                            )
                             re_btn.click(
                                 fn=bind_regen_click_param(text, audio_path),
                                 inputs=[st_temp_list, *pick_args],
                                 outputs=st_temp_list,
                             )
-                            # print number of pick args
-                            print(
-                                f"[webui2] [Debug] bind with pick args {len(pick_args)}"
-                            )
 
                         gr.Audio(value=audio_path, label="Audio")
 
-        gr.Button(value="重新合并音频")
+        gr.Button(value="合并音频").click(
+            fn=merge_from_temp_files, inputs=[st_temp_list], outputs=output_audio
+        )
 
     return st_temp_list
 
 
+def update_textbox(i: int):
+    def inner(text: str, temp_list: list[tuple[str, str]]) -> list[tuple[str, str]]:
+        new_list = temp_list.copy()
+        if 0 <= i < len(new_list):
+            audio_path = new_list[i][1]
+            new_list[i] = (text, audio_path)
+        return new_list
+
+    return inner
+
+
 def bind_regen_click_param(text, audio_output_path):
-    def wrapper(
+    def inner(
         # from templist
         temp_list,
         # from pick args
@@ -86,7 +102,6 @@ def bind_regen_click_param(text, audio_output_path):
         repetition_penalty,
         max_mel_tokens,
     ):
-        print(f"[webui2] [Debug] bind with spearker number {len(speakers_data)} ")
         return regenerate_single(
             text,audio_output_path,temp_list,speakers_data,
             "普通推理",
@@ -94,4 +109,4 @@ def bind_regen_click_param(text, audio_output_path):
             length_penalty, num_beams, repetition_penalty, max_mel_tokens,
         )  # fmt: skip
 
-    return wrapper
+    return inner

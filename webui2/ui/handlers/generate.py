@@ -185,7 +185,7 @@ def gen_multi_dialog_audio(
             )
             print(f"[webui2][Info] No.{i}\t正在生成 '{speaker}' 的对话: {text[:20]}...")
 
-            audio_output_path = str(temp_dir / f"{speaker}_{i}_{int(time.time())}.wav")
+            audio_output_path = str(temp_dir / f"{i}_{speaker}_{int(time.time())}.wav")
             tts.infer(
                 speakers[speaker], text, audio_output_path, verbose=False, **kwargs
             )
@@ -227,13 +227,15 @@ def gen_multi_dialog_audio(
             audio_output_path, bgm_path, additional_bgm, bgm_volume, bgm_loop
         )
 
+        print(f"Converstion dialog saved to : {audio_output_path}")
+
         return (
             gr.update(value=audio_output_path, visible=True),
             gr.update(value=subtitle_path, visible=bool(subtitle_path)),
             temp_files,
         )
     except Exception as e:
-        gr.Error(f"生成对话音频时发生错误: {str(e)}")
+        gr.Error(f"Error occured: {str(e)}")
         traceback.print_exc()
         return None
 
@@ -270,6 +272,125 @@ def gen_audio_with_bgm(
     return mix_audio_with_bgm(
         str(audio_output_path), bgm_paths, volume=bgm_volume, loop=bgm_loop
     )
+
+
+def merge_from_temp_files(
+    temp_files: list[tuple[str, str]],  # list of (text, audio_path), from gr.Component
+    gen_subtitle=False,
+    subtitle_model="base",
+    subtitle_lang="zh",
+    bgm_path=None,
+    bgm_volume=0.3,
+    bgm_loop=True,
+    additional_bgm=[],
+    interval=0.5,
+    progress=gr.Progress(),
+):
+    import subprocess
+
+    tts = TTSManager.get_instance().get_tts()
+    tts.gr_progress = progress  # type: ignore
+
+    audio_files = [audio_path for _, audio_path in temp_files]
+    audio_output_path = Path("outputs") / f"dialog_{int(time.time())}.wav"
+
+    ffmpeg = SubtitleManager.get_instance().generator.ffmpeg_path
+    if ffmpeg:
+        # Use ffmpeg and subprocess to concatenate audio files with silence intervals
+        import tempfile
+
+        if not audio_files:
+            return None
+
+        # Get sample rate from the first audio file
+        from scipy.io import wavfile
+
+        sr, _ = wavfile.read(audio_files[0])
+        silence_duration = interval
+        silence_samples = int(sr * silence_duration)
+
+        # Generate a temporary silence wav file
+        import numpy as np
+
+        silence_wav_path = None
+        if silence_samples > 0 and len(audio_files) > 1:
+            silence_data = np.zeros(silence_samples, dtype=np.int16)
+            silence_wav = tempfile.NamedTemporaryFile(delete=False, suffix=".wav")
+            wavfile.write(silence_wav.name, sr, silence_data)
+            silence_wav_path = silence_wav.name
+
+        # Create a temporary file list for ffmpeg
+        with tempfile.NamedTemporaryFile(mode="w+", delete=False, suffix=".txt") as f:
+            for idx, audio_file in enumerate(audio_files):
+                f.write(f"file '{os.path.abspath(audio_file)}'\n")
+                # Add silence between segments, except after the last one
+                if silence_wav_path and idx < len(audio_files) - 1:
+                    f.write(f"file '{os.path.abspath(silence_wav_path)}'\n")
+            filelist_path = f.name
+
+        cmd = [
+            ffmpeg,
+            "-y",
+            "-f",
+            "concat",
+            "-safe",
+            "0",
+            "-i",
+            filelist_path,
+            "-c",
+            "copy",
+            str(audio_output_path),
+        ]
+        try:
+            subprocess.run(cmd, check=True)
+        except Exception as e:
+            print(f"[mix_from_temp_files][Error] ffmpeg concat failed: {e}")
+            return None
+        finally:
+            try:
+                os.remove(filelist_path)  # remove temporary file
+            except Exception:
+                pass
+            if silence_wav_path:
+                try:
+                    os.remove(silence_wav_path)
+                except Exception:
+                    pass
+            gr.Success("Audio files have been successfully merged")
+            print(f"Audio files have been successfully merged to: {audio_output_path}")
+        return str(audio_output_path)
+    else:
+        # Use wavfile library to concatenate audio files with silence intervals
+        if not audio_files:
+            return None
+        import numpy as np
+        from scipy.io import wavfile
+
+        sample_rate = None
+        audio_datas = []
+        for idx, audio_file in enumerate(audio_files):
+            sr, data = wavfile.read(audio_file)
+            if sample_rate is None:
+                sample_rate = sr
+            elif sr != sample_rate:
+                raise ValueError(
+                    f"Sample rate mismatch: {audio_file} has {sr}, expected {sample_rate}"
+                )
+            audio_datas.append(data)
+            # Add silence between segments, except after the last one
+            if idx < len(audio_files) - 1 and interval > 0:
+                silence = np.zeros(int(interval * sample_rate), dtype=data.dtype)
+                audio_datas.append(silence)
+        if not audio_datas:
+            return None
+        mixed_audio = np.concatenate(audio_datas)
+        wavfile.write(str(audio_output_path), sample_rate, mixed_audio)
+        gr.Success(f"合并音频已保存至 {audio_output_path}")
+        print(f"[generate][Info] merged wav file saved to {audio_output_path}")
+
+        return str(audio_output_path)
+
+    # TODO Mix with background music
 
 
 def clean_temp_files(temp_dir: str):
@@ -330,6 +451,7 @@ def regenerate_single(
             "max_mel_tokens": int(max_mel_tokens),
         }
 
+        progress(0.1, "正在解析对话文本...")
         speaker, text = extract_speaker_and_text(text)
         if speaker == "":
             gr.Error("对话文本中没有指定角色，请使用 [角色名] 文本 的格式")
@@ -338,6 +460,7 @@ def regenerate_single(
         # speakers_data: list of (speaker, audio_path)
         speakers = {name: audio for (name, audio) in speakers_data}
 
+        progress(0.3, "正在生成...")
         # Regenerate audio
         if infer_mode == "普通推理":
             _ = tts.infer(
@@ -358,7 +481,7 @@ def regenerate_single(
                 sentences_bucket_max_size=sentences_bucket_max_size,
                 **kwargs,
             )
-
+        progress(0.9, "正在更新临时文件列表...")
         # find the index of audio_output_path in temp_files
         # the temp_files is a list of (text, audio_path)
         # clone temp_files and replace the audio_path that matches audio_output_path with new_output_path
