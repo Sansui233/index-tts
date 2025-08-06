@@ -115,10 +115,11 @@ def gen_multi_dialog_audio(
     interval=0.5,
     *args,  # 包含advanced parameters 和 speaker 列表(名字、音频)
     progress=gr.Progress(),
+    temp_dir=TEMP_DIR,
 ):
     try:
         """Handle multi-dialog generation"""
-        os.makedirs(TEMP_DIR, exist_ok=True)
+        os.makedirs(temp_dir, exist_ok=True)
 
         if tts is None:
             gr.Error("TTS model is not initialized")
@@ -170,7 +171,7 @@ def gen_multi_dialog_audio(
         dialog_lines = parse_dialogs(dialog_text, speakers, progress)
 
         # Generate audio for each dialog line
-        clean_temp_files(str(TEMP_DIR))
+        clean_temp_files(str(temp_dir))
         audio_segments = []
         temp_files: list[tuple[str, str]] = []  # list of (text, audio_path)
         sample_rate = None
@@ -186,7 +187,7 @@ def gen_multi_dialog_audio(
             )
             print(f"[webui2][Info] No.{i}\t正在生成 '{speaker}' 的对话: {text[:20]}...")
 
-            audio_output_path = str(TEMP_DIR / f"{i}_{speaker}_{int(time.time())}.wav")
+            audio_output_path = str(temp_dir / f"{i}_{speaker}_{int(time.time())}.wav")
             tts.infer(
                 speakers[speaker], text, audio_output_path, verbose=False, **kwargs
             )

@@ -182,7 +182,7 @@ def create_multi_dialog_tab_page():
             ]
 
             # Create a temporary list for generated items
-            st_temp_list = create_temp_list(pick_args, multi_output_audio)
+            st_temp_list = create_temp_list(pick_args, multi_output_audio, interval)
 
     # Bind events
     load_preset_btn.click(

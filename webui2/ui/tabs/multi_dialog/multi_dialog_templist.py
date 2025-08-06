@@ -9,7 +9,9 @@ from webui2.ui.handlers.generate import (
 )
 
 
-def create_temp_list(pick_args: list[gr.Component], output_audio: gr.Audio):
+def create_temp_list(
+    pick_args: list[gr.Component], output_audio: gr.Audio, interval: gr.Slider
+):
     """
     clickhandler:
         (text, audio_output_path, temp_files) -> temp_files
@@ -81,7 +83,9 @@ def create_temp_list(pick_args: list[gr.Component], output_audio: gr.Audio):
                         )
 
         gr.Button(value="合并音频", key="merge_audio").click(
-            fn=merge_from_temp_files, inputs=[st_temp_list], outputs=output_audio
+            fn=merge_from_temp_files,
+            inputs=[st_temp_list, interval],
+            outputs=output_audio,
         )
         with gr.Row():
             gr.Button(value="加载列表", key="load_temp_list").click(
