@@ -1,4 +1,5 @@
 import os
+import shutil
 import time
 import traceback
 from pathlib import Path
@@ -11,8 +12,8 @@ from indextts.infer import IndexTTS
 from webui2.utils import mix_audio_with_bgm
 from webui2.utils.subtitle_manager import SubtitleManager
 from webui2.utils.tts_manager import TTSManager
+from webui2.config import TEMP_DIR
 
-TEMP_DIR = Path("outputs") / "temp_dialog"
 
 
 def gen_audio(
@@ -113,13 +114,13 @@ def gen_multi_dialog_audio(
     speaker_count,  # 指定 *args 中的 speaker 数量
     dialog_text,
     interval=0.5,
+    session = "default_session",
     *args,  # 包含advanced parameters 和 speaker 列表(名字、音频)
     progress=gr.Progress(),
-    temp_dir=TEMP_DIR,
 ):
-    try:
-        """Handle multi-dialog generation"""
-        os.makedirs(temp_dir, exist_ok=True)
+    try:  
+        output_dir=str(TEMP_DIR / f"{session}")
+        os.makedirs(output_dir, exist_ok=True)
 
         if tts is None:
             gr.Error("TTS model is not initialized")
@@ -160,6 +161,8 @@ def gen_multi_dialog_audio(
             "max_mel_tokens": int(max_mel_tokens),
         }
 
+
+        print(f"[webui2][Info] 参考角色数量: {speaker_count}")
         # Parse speaker inputs into Dict<name, audio_name, audio_blob>
         gr_speakers = (
             args[-speaker_count * 3 :] if len(args) >= speaker_count * 3 else []
@@ -171,7 +174,6 @@ def gen_multi_dialog_audio(
         dialog_lines = parse_dialogs(dialog_text, speakers, progress)
 
         # Generate audio for each dialog line
-        clean_temp_files(str(temp_dir))
         audio_segments = []
         temp_files: list[tuple[str, str]] = []  # list of (text, audio_path)
         sample_rate = None
@@ -187,7 +189,9 @@ def gen_multi_dialog_audio(
             )
             print(f"[webui2][Info] No.{i}\t正在生成 '{speaker}' 的对话: {text[:20]}...")
 
-            audio_output_path = str(temp_dir / f"{i}_{speaker}_{int(time.time())}.wav")
+            audio_output_path = os.path.join(
+                output_dir, f"{i}_{speaker}_{int(time.time())}.wav"
+            )
             tts.infer(
                 speakers[speaker], text, audio_output_path, verbose=False, **kwargs
             )
@@ -383,6 +387,7 @@ def merge_from_temp_files(
             if idx < len(audio_files) - 1 and interval > 0:
                 silence = np.zeros(int(interval * sample_rate), dtype=data.dtype)
                 audio_datas.append(silence)
+        # TODO Mix with background music
         if not audio_datas:
             return None
         mixed_audio = np.concatenate(audio_datas)
@@ -391,18 +396,6 @@ def merge_from_temp_files(
         print(f"[generate][Info] merged wav file saved to {audio_output_path}")
 
         return str(audio_output_path)
-
-    # TODO Mix with background music
-
-
-def clean_temp_files(temp_dir: str):
-    if not os.path.exists(temp_dir):
-        return
-    for file in os.listdir(temp_dir):
-        file_path = os.path.join(temp_dir, file)
-        if os.path.isfile(file_path):
-            os.remove(file_path)
-    print(f"已经清理临时文件夹 {temp_dir} 中的所有文件")
 
 
 def regenerate_single(
@@ -509,7 +502,6 @@ def parse_dialogs(
 
     for line in dialog_text.split("\n"):
         line = line.strip()
-        print(f"[webui2][Debug] 处理行: {line}")
         if not line:
             continue
 

@@ -3,6 +3,7 @@ Configuration module
 """
 
 from .settings import (
+    TEMP_DIR,
     SAMPLES_DIR,
     parse_arguments,
     set_ffmpeg_path,

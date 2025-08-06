@@ -3,7 +3,10 @@ Multi-dialog generation tab
 """
 
 import os
+import shutil
+import uuid
 import webbrowser
+from time import time
 from typing import Callable
 
 import gradio as gr
@@ -19,8 +22,9 @@ from webui2.ui.handlers.generate import (
     regenerate_single,
 )
 from webui2.ui.js.notify import notify_done
-from webui2.ui.tabs.multi_dialog.multi_dialog_templist import create_temp_list
 from webui2.utils import SubtitleManager, TTSManager
+from webui2.ui.tabs.multi_dialog.multi_dialog_templist import create_temp_list
+
 
 from .multi_dialog_presets import (
     create_multi_dialog_presets,
@@ -31,7 +35,7 @@ from .multi_dialog_presets import (
 from .multi_dialog_role import create_role
 
 
-def create_multi_dialog_tab_page():
+def create_multi_dialog_tab_page(session: gr.State):
     tts_manager = TTSManager.get_instance()
     subtitle_manager = SubtitleManager.get_instance()
 
@@ -182,7 +186,9 @@ def create_multi_dialog_tab_page():
             ]
 
             # Create a temporary list for generated items
-            st_temp_list = create_temp_list(pick_args, multi_output_audio, interval)
+            st_temp_list = create_temp_list(
+                pick_args, multi_output_audio, interval, session
+            )
 
     # Bind events
     load_preset_btn.click(
@@ -255,6 +261,7 @@ def create_multi_dialog_tab_page():
                 st_speaker_count,
                 dialog_text,
                 interval,
+                session,
                 # Advanced params from the tab
                 *advanced_params,
                 gen_subtitle,

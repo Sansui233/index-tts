@@ -19,3 +19,4 @@ models/whisper*
 samples/*
 !samples/example1.wav
 temp_dialog/
+webui2/presets/multi_dialog/*

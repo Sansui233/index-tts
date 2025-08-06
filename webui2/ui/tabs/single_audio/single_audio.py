@@ -17,7 +17,7 @@ from webui2.ui.js.notify import notify_done
 from webui2.utils import SubtitleManager, TTSManager
 
 
-def create_single_audio_tab_page():
+def create_single_audio_tab_page(session: gr.State):
     tts_manager = TTSManager.get_instance()
     subtitle_manager = SubtitleManager.get_instance()
 

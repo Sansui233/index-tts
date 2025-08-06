@@ -5,6 +5,8 @@ Main entry point for the web interface
 """
 
 import os
+from time import time
+import uuid
 import warnings
 import webbrowser
 from pathlib import Path
@@ -50,24 +52,28 @@ TTSManager.set_initialize_args(
 
 
 def create_webui():
-    """Create the main web UI"""
+
     with gr.Blocks(
         title="IndexTTS Demo",
         css_paths=os.path.join("webui2", "ui", "styles", "style.css"),
     ) as demo:
+        
+        session = gr.State('') 
+
         create_header()
         with gr.Tab("音频生成"):
-            create_single_audio_tab_page()
+            create_single_audio_tab_page(session)
         with gr.Tab("多人对话"):
-            create_multi_dialog_tab_page()
+            create_multi_dialog_tab_page(session)
         with gr.Tab("单独生成字幕"):
-            create_subtitle_only_tab_page()
+            create_subtitle_only_tab_page(session)
 
         # Gradio 这版本有 bug，首页不渲染个 Textbox 导致后面的 Textbox 渲染不出来
         gr.Textbox(label="444", visible=True, lines=1, elem_classes="display-none")
 
-    return demo
+        demo.load(fn=lambda: str(time()), inputs=None, outputs=session)
 
+    return demo
 
 def main():
     """Main function to run the web UI"""

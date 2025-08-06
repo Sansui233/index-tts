@@ -4,8 +4,10 @@ Configuration and settings for IndexTTS WebUI
 
 import argparse
 import os
+from pathlib import Path
 import sys
 
+TEMP_DIR = Path("outputs") / "temp_dialog"
 
 def set_ffmpeg_path():
     """Set FFmpeg path in environment variables"""
