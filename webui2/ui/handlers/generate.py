@@ -12,6 +12,8 @@ from webui2.utils import mix_audio_with_bgm
 from webui2.utils.subtitle_manager import SubtitleManager
 from webui2.utils.tts_manager import TTSManager
 
+TEMP_DIR = Path("outputs") / "temp_dialog"
+
 
 def gen_audio(
     tts: IndexTTS | None,
@@ -116,8 +118,7 @@ def gen_multi_dialog_audio(
 ):
     try:
         """Handle multi-dialog generation"""
-        temp_dir = Path("outputs") / "temp_dialog"
-        os.makedirs(temp_dir, exist_ok=True)
+        os.makedirs(TEMP_DIR, exist_ok=True)
 
         if tts is None:
             gr.Error("TTS model is not initialized")
@@ -169,7 +170,7 @@ def gen_multi_dialog_audio(
         dialog_lines = parse_dialogs(dialog_text, speakers, progress)
 
         # Generate audio for each dialog line
-        clean_temp_files(str(temp_dir))
+        clean_temp_files(str(TEMP_DIR))
         audio_segments = []
         temp_files: list[tuple[str, str]] = []  # list of (text, audio_path)
         sample_rate = None
@@ -185,7 +186,7 @@ def gen_multi_dialog_audio(
             )
             print(f"[webui2][Info] No.{i}\t正在生成 '{speaker}' 的对话: {text[:20]}...")
 
-            audio_output_path = str(temp_dir / f"{i}_{speaker}_{int(time.time())}.wav")
+            audio_output_path = str(TEMP_DIR / f"{i}_{speaker}_{int(time.time())}.wav")
             tts.infer(
                 speakers[speaker], text, audio_output_path, verbose=False, **kwargs
             )

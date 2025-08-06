@@ -45,7 +45,7 @@ def create_multi_dialog_tab_page():
             gr.HTML('<a href="#subtitle-controls"><h3">🎬 字幕<h3></a>')
             gr.HTML('<a href="#bgm-accordion""><h3">🎵 背景音乐<h3></a>')
             gr.HTML('<a href="#advanced-params""><h3">⚙️ 高级参数<h3></a>')
-            gr.HTML('<a href="#anchor-temp-list"><h3">🗂️ 临时对话列表 <h3></a>')
+            gr.HTML('<a href="#anchor-temp-list"><h3">🗂️ 对话列表 <h3></a>')
 
         # Speaker configuration rows
         with gr.Column(scale=9):
@@ -76,11 +76,9 @@ def create_multi_dialog_tab_page():
             def render_roles(speakers_data: list[tuple]):
                 gr_speakers = []  # length: count * 3, tuple[Textbox, Dropdown, Audio]
 
-                for i in range(0, len(speakers_data), 2):  # 布局控制2个一行
-                    with gr.Row():
+                with gr.Row():
+                    for i in range(0, len(speakers_data)):  # 布局控制2个一行
                         gr_speakers.extend(create_role(i + 1, speakers_data[i]))
-                        if i + 1 < len(speakers_data):
-                            gr_speakers.extend(create_role(i + 2, speakers_data[i + 1]))  # fmt:off
 
                 bind_save_preset_click(gr_speakers)
                 bind_multi_gen_click(gr_speakers)
