@@ -7,6 +7,7 @@ Main entry point for the web interface
 import os
 import warnings
 import webbrowser
+from pathlib import Path
 from threading import Timer
 
 import gradio as gr
@@ -25,7 +26,7 @@ from webui2.ui.tabs import (
     create_single_audio_tab_page,
     create_subtitle_only_tab_page,
 )
-from webui2.utils import SubtitleManager, TTSManager
+from webui2.utils import TTSManager
 
 # Initialize environment
 set_ffmpeg_path()
@@ -41,11 +42,11 @@ cmd_args = parse_arguments()
 validate_model_files(cmd_args.model_dir)
 setup_directories()
 
-# Initialize singleton managers
-tts_mgr = TTSManager(
+# Singleton managers is automatically initialized
+# But args must be set before creating the instance
+TTSManager.set_initialize_args(
     cmd_args.model_dir, os.path.join(cmd_args.model_dir, "config.yaml")
 )
-subtitle_mgr = SubtitleManager()
 
 
 def create_webui():
@@ -70,6 +71,7 @@ def create_webui():
 
 def main():
     """Main function to run the web UI"""
+    gr.set_static_paths(Path.cwd().absolute() / "webui2" / "assets")
     demo = create_webui()
     demo.queue(20)
 

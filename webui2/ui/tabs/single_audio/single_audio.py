@@ -13,6 +13,7 @@ from webui2.ui.common import (
     create_subtitle_controls,
 )
 from webui2.ui.handlers.generate import gen_audio
+from webui2.ui.js.notify import notify_done
 from webui2.utils import SubtitleManager, TTSManager
 
 
@@ -129,6 +130,8 @@ def create_single_audio_tab_page():
         ],
         outputs=[output_audio, subtitle_output],
     )
+
+    output_audio.change(None, [], [], js=notify_done)
 
     open_output_folder.click(on_open_output_folder_click, inputs=[], outputs=[])
 

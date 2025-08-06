@@ -7,6 +7,7 @@ import os
 
 import gradio as gr
 
+from webui2.ui.js.notify import notify_done
 from webui2.utils import SubtitleManager
 
 from ....config import SAMPLES_DIR
@@ -53,6 +54,7 @@ def create_subtitle_only_tab_page():
             output_subtitle = gr.File(
                 label="生成的字幕文件", visible=True, interactive=False
             )
+            output_subtitle.change(None, [], [], js=notify_done)
 
     # Add examples if available
     if sample_examples:

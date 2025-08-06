@@ -14,6 +14,7 @@ class TTSManager:
 
     _instance = None
     _initialized = False
+    _initialize_args: tuple[str, str] | None = None
 
     def __new__(cls, model_dir=None, cfg_path=None):
         if cls._instance is None:
@@ -39,11 +40,22 @@ class TTSManager:
             )
 
     @classmethod
+    def set_initialize_args(cls, model_dir=None, cfg_path=None):
+        """Set initialization arguments for TTSManager"""
+        print(model_dir, cfg_path)
+        if model_dir and cfg_path:
+            cls._initialize_args = (model_dir, cfg_path)
+
+    @classmethod
     def get_instance(cls):
         if cls._instance is None:
-            raise RuntimeError(
-                "TTSManager is not initialized. Call TTSManager(model_dir, cfg_path) first."
-            )
+            if cls._initialize_args is not None:
+                model_dir, cfg_path = cls._initialize_args
+                cls._instance = cls(model_dir=model_dir, cfg_path=cfg_path)
+            else:
+                raise RuntimeError(
+                    "TTSManager is not initialized. Call TTSManager(model_dir, cfg_path) first."
+                )
         return cls._instance
 
     def _load_tts(self):

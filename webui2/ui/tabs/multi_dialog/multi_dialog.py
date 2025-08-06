@@ -18,6 +18,7 @@ from webui2.ui.handlers.generate import (
     gen_multi_dialog_audio,
     regenerate_single,
 )
+from webui2.ui.js.notify import notify_done
 from webui2.ui.tabs.multi_dialog.multi_dialog_templist import create_temp_list
 from webui2.utils import SubtitleManager, TTSManager
 
@@ -272,6 +273,7 @@ def create_multi_dialog_tab_page():
             outputs=[multi_output_audio, multi_subtitle_output, st_temp_list],
         )
 
+    multi_output_audio.change(None, [], [], js=notify_done)
     open_output_folder.click(
         on_open_output_folder_click,
         inputs=[],
