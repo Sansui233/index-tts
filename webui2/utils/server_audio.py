@@ -31,7 +31,7 @@ class ServerAudioManager:
                 continue
 
         self.base_audio_dirs = audio_dirs
-        self.supported_formats = [".wav", ".mp3", ".flac", ".m4a"]
+        self.supported_formats = [".wav", ".mp3", ".flac", ".m4a", ".ogg"]
 
     def get_server_audio_list(self) -> Dict[str, List[str]]:
         """Get categorized list of server audio files\n
