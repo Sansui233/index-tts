@@ -5,12 +5,11 @@ Main entry point for the web interface
 """
 
 import os
-from time import time
-import uuid
 import warnings
 import webbrowser
 from pathlib import Path
 from threading import Timer
+from time import time
 
 import gradio as gr
 
@@ -52,13 +51,11 @@ TTSManager.set_initialize_args(
 
 
 def create_webui():
-
     with gr.Blocks(
         title="IndexTTS Demo",
         css_paths=os.path.join("webui2", "ui", "styles", "style.css"),
     ) as demo:
-        
-        session = gr.State('') 
+        session = gr.State("")
 
         create_header()
         with gr.Tab("音频生成"):
@@ -74,6 +71,7 @@ def create_webui():
         demo.load(fn=lambda: str(time()), inputs=None, outputs=session)
 
     return demo
+
 
 def main():
     """Main function to run the web UI"""

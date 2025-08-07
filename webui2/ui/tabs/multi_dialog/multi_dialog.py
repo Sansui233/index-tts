@@ -76,7 +76,7 @@ def create_multi_dialog_tab_page(session: gr.State):
                 with gr.Row():
                     for i in range(0, len(speakers_data)):
                         gr_speakers.extend(
-                            create_role(speakers_data, i + 1, speakers_data[i])
+                            create_role(speakers_data, i, speakers_data[i])
                         )
 
                 bind_save_preset_click(gr_speakers)

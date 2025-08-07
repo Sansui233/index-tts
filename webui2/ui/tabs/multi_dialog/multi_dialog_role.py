@@ -12,7 +12,7 @@ def create_role(
 ):
     name, audioPath = speaker_data
     if name is None:
-        name = f"角色{i}"
+        name = f"角色{i + 1}"
     with gr.Column(elem_classes="multi_dialog-roles"):
         with gr.Row(scale=1):
             gr_name = gr.Textbox(
