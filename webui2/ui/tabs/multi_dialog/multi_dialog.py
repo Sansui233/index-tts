@@ -3,10 +3,7 @@ Multi-dialog generation tab
 """
 
 import os
-import shutil
-import uuid
 import webbrowser
-from time import time
 from typing import Callable
 
 import gradio as gr
@@ -22,9 +19,8 @@ from webui2.ui.handlers.generate import (
     regenerate_single,
 )
 from webui2.ui.js.notify import notify_done
-from webui2.utils import SubtitleManager, TTSManager
 from webui2.ui.tabs.multi_dialog.multi_dialog_templist import create_temp_list
-
+from webui2.utils import SubtitleManager, TTSManager
 
 from .multi_dialog_presets import (
     create_multi_dialog_presets,
@@ -173,8 +169,9 @@ def create_multi_dialog_tab_page(session: gr.State):
                 repetition_penalty, max_mel_tokens,
             ]  # fmt: skip
 
-            pick_args = [
+            pick_args: list[gr.Component] = [
                 st_speakers_data,
+                gr.State("普通推理"),
                 do_sample,
                 top_p,
                 top_k,
@@ -183,6 +180,8 @@ def create_multi_dialog_tab_page(session: gr.State):
                 num_beams,
                 repetition_penalty,
                 max_mel_tokens,
+                max_text_tokens_per_sentence,
+                sentences_bucket_max_size,
             ]
 
             # Create a temporary list for generated items

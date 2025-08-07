@@ -1,5 +1,5 @@
+import json
 import os
-import shutil
 import time
 import traceback
 from pathlib import Path
@@ -9,11 +9,10 @@ import numpy as np
 from scipy.io import wavfile
 
 from indextts.infer import IndexTTS
+from webui2.config import TEMP_DIR
 from webui2.utils import mix_audio_with_bgm
 from webui2.utils.subtitle_manager import SubtitleManager
 from webui2.utils.tts_manager import TTSManager
-from webui2.config import TEMP_DIR
-
 
 
 def gen_audio(
@@ -114,12 +113,12 @@ def gen_multi_dialog_audio(
     speaker_count,  # 指定 *args 中的 speaker 数量
     dialog_text,
     interval=0.5,
-    session = "default_session",
+    session="default_session",
     *args,  # 包含advanced parameters 和 speaker 列表(名字、音频)
     progress=gr.Progress(),
 ):
-    try:  
-        output_dir=str(TEMP_DIR / f"{session}")
+    try:
+        output_dir = str(TEMP_DIR / f"{session}")
         os.makedirs(output_dir, exist_ok=True)
 
         if tts is None:
@@ -160,7 +159,6 @@ def gen_multi_dialog_audio(
             "repetition_penalty": float(repetition_penalty),
             "max_mel_tokens": int(max_mel_tokens),
         }
-
 
         print(f"[webui2][Info] 参考角色数量: {speaker_count}")
         # Parse speaker inputs into Dict<name, audio_name, audio_blob>
@@ -234,6 +232,17 @@ def gen_multi_dialog_audio(
         )
 
         print(f"Converstion dialog saved to : {audio_output_path}")
+
+        # save temp_list.json to session directory
+        index_file = TEMP_DIR / session / "temp_list.json"
+        print(f"[webui2][Info] Saving index files to {index_file}")
+        if not index_file.parent.exists():
+            index_file.parent.mkdir(parents=True, exist_ok=True)
+        data = [
+            {"text": text, "audio_path": audio_path} for text, audio_path in temp_files
+        ]
+        with open(index_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
 
         return (
             gr.update(value=audio_output_path, visible=True),
@@ -343,9 +352,7 @@ def merge_from_temp_files(
             "0",
             "-i",
             filelist_path,
-            "-c",
-            "copy",
-            str(audio_output_path),
+            str(audio_output_path),  # 这边没指定统一的转码 码率不知道有没有问题
         ]
         try:
             subprocess.run(cmd, check=True)
@@ -400,11 +407,12 @@ def merge_from_temp_files(
 
 def regenerate_single(
     # from button
-    text: str,
-    audio_output_path: str,
-    temp_list: list[tuple[str, str]],  # gr.Component
+    text: str,  # gr.Component
+    original_audio: str,  # gr.Component
+    temp_list: list[tuple[str, str]],  # list of (text, audio_path)
+    session,  # gr.State
     # from multi_dialog
-    speakers_data,  # list of gr.Component
+    speakers_data,  # gr.State
     infer_mode: str,  # gr.Component
     do_sample,  # gr.Component
     top_p,  # gr.Component
@@ -414,25 +422,30 @@ def regenerate_single(
     num_beams,  # gr.Component
     repetition_penalty,  # gr.Component
     max_mel_tokens,  # gr.Component
-    max_text_tokens_per_sentence=120,  # gr.Component
-    sentences_bucket_max_size=4,  # gr.Component
+    max_text_tokens_per_sentence: int = 120,  # gr.Component
+    sentences_bucket_max_size: int = 4,  # gr.Component
     # internal
     progress=gr.Progress(),
-) -> list[tuple[str, str]] | None:
-    tts = TTSManager.get_instance().get_tts()
-    if tts is None:
-        gr.Error("TTS model is not initialized")
-        return
-    if temp_list is None:
-        temp_list = []
-
-    # new audio_output_path is like "outputs/temp_dialog/spk_1234567890.wav"
-    # replace the timestamp with the current time
-    parts = audio_output_path.split("_")
-    parts[-1] = f"{int(time.time())}.wav"
-    new_output_path = "_".join(parts)
-
+):
+    """
+    Return audio file only
+    """
     try:
+        tts = TTSManager.get_instance().get_tts()
+        if tts is None:
+            gr.Error("TTS model is not initialized")
+            raise ValueError("TTS model is not initialized")
+            return
+
+        # new audio_output_path is like "outputs/temp_dialog/spk_1234567890.wav"
+        # replace the timestamp with the current time
+        print(f"[webui2][Info] Regenerating audio for: {text}")
+        parts = Path(original_audio).name.split("_")
+        parts[-1] = f"{int(time.time())}.wav"
+        output_wav_path: Path = TEMP_DIR / session / "_".join(parts)
+        print(f"[webui2][Debug] original audio_path: {original_audio}")
+        print(f"[webui2][Debug] output_wav_path: {output_wav_path}")
+
         tts.gr_progress = progress  # type: ignore
 
         kwargs = {
@@ -450,6 +463,7 @@ def regenerate_single(
         speaker, text = extract_speaker_and_text(text)
         if speaker == "":
             gr.Error("对话文本中没有指定角色，请使用 [角色名] 文本 的格式")
+            print("[webui2][Error] 对话文本中没有指定角色，请使用 [角色名] 文本 的格式")
             return
 
         # speakers_data: list of (speaker, audio_path)
@@ -461,8 +475,8 @@ def regenerate_single(
             _ = tts.infer(
                 speakers[speaker],
                 text,
-                new_output_path,
-                # verbose=True,  # cmd_args.verbose
+                output_wav_path,
+                verbose=False,  # cmd_args.verbose
                 max_text_tokens_per_sentence=int(max_text_tokens_per_sentence),
                 **kwargs,
             )
@@ -470,23 +484,30 @@ def regenerate_single(
             _ = tts.infer_fast(
                 speakers[speaker],
                 text,
-                new_output_path,
-                # verbose=True,  # cmd_args.verbose
+                output_wav_path,
+                verbose=False,  # cmd_args.verbose
                 max_text_tokens_per_sentence=int(max_text_tokens_per_sentence),
                 sentences_bucket_max_size=sentences_bucket_max_size,
                 **kwargs,
             )
-        progress(0.9, "正在更新临时文件列表...")
-        # find the index of audio_output_path in temp_files
-        # the temp_files is a list of (text, audio_path)
-        # clone temp_files and replace the audio_path that matches audio_output_path with new_output_path
-        updated_temp_files = []
-        for t, a_path in temp_list:
-            if a_path == audio_output_path:
-                updated_temp_files.append((t, new_output_path))
-            else:
-                updated_temp_files.append((t, a_path))
-        return updated_temp_files
+
+        # update temp_list with new audio path
+        # audio 在加载后的 Path 是系统的临时目录，只有音频名字是一样的
+        # 现在是名字匹配，序号匹配是最好的，但我不想再包一层，要的参数也太多了
+        update_success = False
+        for i, (last_text, last_audio) in enumerate(temp_list):
+            orginal_audio_name = Path(original_audio).name
+            last_audio_name = Path(last_audio).name
+            if last_audio_name == orginal_audio_name:
+                print(f"[webui2][Debug] 对话列表状态更新: {i + 1} {last_audio}")
+                temp_list[i] = (last_text, str(output_wav_path))
+                update_success = True
+                break
+        if not update_success:
+            gr.Warning("未找到匹配的音频文件，无法更新对话列表")
+            print("[webui2][Warn] 未找到匹配的音频文件，无法更新对话列表")
+
+        return str(output_wav_path)
 
     except Exception as e:
         gr.Error(f"生成音频时发生错误: {str(e)}")
