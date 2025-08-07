@@ -11,10 +11,11 @@ from webui2.ui.handlers.generate import merge_from_temp_files, regenerate_single
 
 
 def create_temp_list(
-    pick_args: list[gr.Component],
+    pick_args: gr.State,  # state of list[gr.Component]
     output_audio: gr.Audio,
     interval: gr.Slider,
     session: gr.State,
+    md_session: gr.Markdown,
 ):
     st_temp_list = gr.State([])  # list of (text, audio_path)
     st_curr_page = gr.State(1)
@@ -29,7 +30,7 @@ def create_temp_list(
         )
 
         gr.Markdown(
-            "### 🗂️ 对话列表\n\n生成的对话列表。\n编辑文字后，需要失焦以保存。",
+            "## 🗂️ 对话列表\n\n生成的对话列表。",
             key="temp_list_header",
             elem_id="anchor-temp-list",
         )
@@ -88,7 +89,7 @@ def create_temp_list(
                                     single_audio,
                                     st_temp_list,
                                     session,
-                                    *pick_args,
+                                    pick_args,
                                 ],
                                 outputs=single_audio,
                             )
@@ -125,7 +126,7 @@ def create_temp_list(
             gr.Button(value="加载对话", key="load_temp_list").click(
                 fn=load_temp_list,
                 inputs=dp,
-                outputs=[st_temp_list, session],
+                outputs=[st_temp_list, session, md_session],
             )
             gr.Button(value="检查session", key="check_session").click(
                 fn=lambda s: gr.Info(f"当前session: {s}", 3),
@@ -216,7 +217,7 @@ def load_temp_list(
                 f"临时对话列表已加载: {len(temp_list)} 条记录\n文件\nsession: {session}"
             )
             print(f"[webui2] [Debug] load_temp_list: session set to {session}")
-            return [temp_list, session]
+            return [temp_list, session, f"当前 Session: **{session}**"]
 
     except Exception as e:
         raise RuntimeError(f"Error when load_temp_list: {e}") from e

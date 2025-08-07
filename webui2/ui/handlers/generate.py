@@ -411,20 +411,7 @@ def regenerate_single(
     original_audio: str,  # gr.Component
     temp_list: list[tuple[str, str]],  # list of (text, audio_path)
     session,  # gr.State
-    # from multi_dialog
-    speakers_data,  # gr.State
-    infer_mode: str,  # gr.Component
-    do_sample,  # gr.Component
-    top_p,  # gr.Component
-    top_k,  # gr.Component
-    temperature,  # gr.Component
-    length_penalty,  # gr.Component
-    num_beams,  # gr.Component
-    repetition_penalty,  # gr.Component
-    max_mel_tokens,  # gr.Component
-    max_text_tokens_per_sentence: int = 120,  # gr.Component
-    sentences_bucket_max_size: int = 4,  # gr.Component
-    # internal
+    pick_args: list,  # gr.State list of components
     progress=gr.Progress(),
 ):
     """
@@ -435,7 +422,29 @@ def regenerate_single(
         if tts is None:
             gr.Error("TTS model is not initialized")
             raise ValueError("TTS model is not initialized")
-            return
+
+        print(f"[webui2][Debug] pick_args: {pick_args}")
+        [
+            # from multi_dialog
+            speakers_data,  # gr.State
+            infer_mode,  # gr.Component
+            do_sample,  # gr.Component
+            top_p,  # gr.Component
+            top_k,  # gr.Component
+            temperature,  # gr.Component
+            length_penalty,  # gr.Component
+            num_beams,  # gr.Component
+            repetition_penalty,  # gr.Component
+            max_mel_tokens,  # gr.Component
+            max_text_tokens_per_sentence,  # gr.Component
+            sentences_bucket_max_size,  # gr.Component
+        ] = pick_args
+
+        # print length of speakers_data
+        print(f"[webui2][Debug] Speakers data length: {len(speakers_data)}")
+        if not speakers_data or len(speakers_data) == 0:
+            gr.Error("没有可用的参考音频，请先添加角色音频")
+            return original_audio
 
         # new audio_output_path is like "outputs/temp_dialog/spk_1234567890.wav"
         # replace the timestamp with the current time

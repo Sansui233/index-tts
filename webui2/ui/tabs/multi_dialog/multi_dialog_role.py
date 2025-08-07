@@ -5,7 +5,11 @@ import gradio as gr
 from webui2.utils import server_audio_manager
 
 
-def create_role(i: int, speaker_data: tuple = (None, None)):
+def create_role(
+    speakers_data: list,
+    i: int,
+    speaker_data: tuple = (None, None),
+):
     name, audioPath = speaker_data
     if name is None:
         name = f"角色{i}"
@@ -38,9 +42,24 @@ def create_role(i: int, speaker_data: tuple = (None, None)):
             interactive=True,
         )
 
-    gr_server_audio.change(
-        fn=load_server_audio, inputs=[gr_server_audio], outputs=[gr_audio]
-    )
+        def set_change(name, audio_path):
+            """Set the speaker data when name or audio changes"""
+            speakers_data[i] = (name, audio_path)
+
+        gr_name.blur(
+            fn=set_change,
+            inputs=[gr_name, gr_audio],
+        )
+
+        gr_server_audio.change(
+            fn=load_server_audio,
+            inputs=[gr_server_audio],
+            outputs=[gr_audio],
+        )
+        gr_audio.change(
+            fn=set_change,
+            inputs=[gr_name, gr_audio],
+        )
 
     return (gr_name, gr_server_audio, gr_audio)
 

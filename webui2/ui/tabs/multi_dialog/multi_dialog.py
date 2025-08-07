@@ -4,10 +4,8 @@ Multi-dialog generation tab
 
 import os
 import webbrowser
-from typing import Callable
 
 import gradio as gr
-from gradio.components.state import State
 
 from webui2.ui.common import (
     create_advanced_params_accordion,
@@ -16,7 +14,6 @@ from webui2.ui.common import (
 )
 from webui2.ui.handlers.generate import (
     gen_multi_dialog_audio,
-    regenerate_single,
 )
 from webui2.ui.js.notify import notify_done
 from webui2.ui.tabs.multi_dialog.multi_dialog_templist import create_temp_list
@@ -77,8 +74,10 @@ def create_multi_dialog_tab_page(session: gr.State):
                 gr_speakers = []  # length: count * 3, tuple[Textbox, Dropdown, Audio]
 
                 with gr.Row():
-                    for i in range(0, len(speakers_data)):  # 布局控制2个一行
-                        gr_speakers.extend(create_role(i + 1, speakers_data[i]))
+                    for i in range(0, len(speakers_data)):
+                        gr_speakers.extend(
+                            create_role(speakers_data, i + 1, speakers_data[i])
+                        )
 
                 bind_save_preset_click(gr_speakers)
                 bind_multi_gen_click(gr_speakers)
@@ -169,24 +168,45 @@ def create_multi_dialog_tab_page(session: gr.State):
                 repetition_penalty, max_mel_tokens,
             ]  # fmt: skip
 
-            pick_args: list[gr.Component] = [
-                st_speakers_data,
-                gr.State("普通推理"),
-                do_sample,
-                top_p,
-                top_k,
-                temperature,
-                length_penalty,
-                num_beams,
-                repetition_penalty,
-                max_mel_tokens,
-                max_text_tokens_per_sentence,
-                sentences_bucket_max_size,
-            ]
+            gr.Markdown(value="\n\n---")
+            # Solve dynamic params passing problem with proxy state + hidden button + js click
+            pick_args_proxy = gr.State([])
+            with gr.Row():
+                md_session = gr.Markdown(value=f"当前为初始 Session {session.value}")
+                collect_btn = gr.Button(
+                    value="同步对话参数",
+                    visible=True,
+                    elem_id="collect-btn",
+                )
+
+                collect_btn.click(
+                    fn=collect_pick_args,
+                    inputs=[
+                        st_speakers_data,
+                        gr.State("普通推理"),
+                        do_sample,
+                        top_p,
+                        top_k,
+                        temperature,
+                        length_penalty,
+                        num_beams,
+                        repetition_penalty,
+                        max_mel_tokens,
+                        max_text_tokens_per_sentence,
+                        sentences_bucket_max_size,
+                    ],
+                    outputs=pick_args_proxy,
+                )
+            st_speakers_data.change(
+                None,
+                None,
+                None,
+                js='() => { console.log("click arg proxy"); document.getElementById("collect-btn").click(); return true;}',
+            )
 
             # Create a temporary list for generated items
             st_temp_list = create_temp_list(
-                pick_args, multi_output_audio, interval, session
+                pick_args_proxy, multi_output_audio, interval, session, md_session
             )
 
     # Bind events
@@ -325,36 +345,6 @@ def remove_role(speakers_data, speaker_count):
     return speakers_data, speaker_count
 
 
-def bind_regenerate_single(
-    infer_mode,
-    do_sample,
-    top_p,
-    top_k,
-    temperature,
-    length_penalty,
-    num_beams,
-    repetition_penalty,
-    max_mel_tokens,
-    st_gr_speakers: State,
-    max_text_tokens_per_sentence=120,
-    sentences_bucket_max_size=4,
-    progress=gr.Progress(),
-) -> Callable:
-    def wrapper(text, audio_output_path, temp_files):
-        gr_speakers_list = st_gr_speakers.value
-        print(
-            f"[webui][Debug] bind regen buttons {text}\n"
-            + f"with {len(st_gr_speakers.value) / 3} speakers "
-            + f"and {len(temp_files)} items in temp_list:"
-        )
-        return regenerate_single(
-            text,audio_output_path,temp_files,
-            infer_mode,
-            do_sample, top_p, top_k, temperature,
-            length_penalty, num_beams, repetition_penalty, max_mel_tokens,
-            max_text_tokens_per_sentence, sentences_bucket_max_size,
-            *gr_speakers_list,
-            progress=progress,
-        )  # fmt: skip
-
-    return wrapper
+def collect_pick_args(*args):
+    gr.Success("已更新对话列表参数")
+    return [*args]
