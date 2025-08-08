@@ -118,7 +118,7 @@ def create_temp_list(
 
         with gr.Row():
             dp = gr.Dropdown(
-                label="对话session",
+                label="选择对话",
                 choices=get_temp_lists(),
                 key="get_temp_lists",
                 interactive=True,
@@ -128,16 +128,26 @@ def create_temp_list(
                 inputs=dp,
                 outputs=[st_temp_list, session, md_session],
             )
-            gr.Button(value="检查session", key="check_session").click(
-                fn=lambda s: gr.Info(f"当前session: {s}", 3),
-                inputs=session,
-            )
             gr.Button(value="保存对话", key="save_temp_list").click(
                 fn=save_temp_list, inputs=[st_temp_list, session], outputs=dp
             )
         gr.Button(
             value="清空所有临时目录", key="clear all", size="sm", min_width=80, scale=0
         ).click(fn=lambda: clean_temp_files(str(TEMP_DIR)))
+        with gr.Row():
+            new_session_name = gr.Textbox(
+                label="新的对话名",
+                placeholder="我的对话",
+            )
+            gr.Button(value="重命名对话", key="rename_session").click(
+                fn=rename_session,
+                inputs=[new_session_name, session, st_temp_list],
+                outputs=[session, md_session, dp],
+            )
+            gr.Button(value="查看当前对话名", key="check_session").click(
+                fn=lambda s: gr.Info(f"当前session: {s}", 3),
+                inputs=session,
+            )
 
     return st_temp_list
 
@@ -168,7 +178,7 @@ def update_textbox(i: int) -> Callable:
     return inner
 
 
-def get_temp_lists() -> list[str]:
+def get_temp_lists() -> list[tuple[str, str]]:
     """Get the list of temporary dialog files"""
     temp_dir = TEMP_DIR
     if not temp_dir.exists():
@@ -177,7 +187,14 @@ def get_temp_lists() -> list[str]:
 
     temp_files = list(temp_dir.rglob("*.json"))
 
-    return [str(file) for file in temp_files]
+    def key(f: Path) -> str:
+        """
+        Example: "a/b/c/d.json" -> "c/d.json"
+        """
+        parts = f.parts
+        return str(Path(*parts[-2:]))
+
+    return [(key(file), str(file)) for file in temp_files]
 
 
 # temp_list format: list of tuples (text, audio_path)
@@ -221,6 +238,54 @@ def load_temp_list(
 
     except Exception as e:
         raise RuntimeError(f"Error when load_temp_list: {e}") from e
+
+
+def rename_session(name: str, last_session: str, temp_list: list[tuple[str, str]]):
+    if "/" in name or "\\" in name:
+        gr.Error("Session 名称不能包含斜杠或反斜杠")
+        return [gr.update(), gr.update(), gr.update()]
+
+    # check if last_session directory exists
+    dirname = TEMP_DIR / last_session
+    if not dirname.exists():
+        gr.Error(f"原始 Session {dirname} 不存在，无法重命名")
+        print(f"Error: original session {dirname} does not exist")
+        return [gr.update(), gr.update(), gr.update()]
+
+    # rename the directory
+    new_dirname = TEMP_DIR / name
+    try:
+        dirname.rename(new_dirname)
+        gr.Success(f"Session 已重命名为 {new_dirname}")
+    except Exception as e:
+        gr.Error(f"重命名 Session 失败: {e}")
+        return [gr.update(), gr.update(), gr.update()]
+
+    # replace temp_list
+    for i, (text, audio_path) in enumerate(temp_list):
+        if last_session in audio_path:
+            new_audio_path = audio_path.replace(last_session, name)
+            temp_list[i] = (text, new_audio_path)
+
+    # replace temp_list file
+    data = [{"text": text, "audio_path": audio_path} for text, audio_path in temp_list]
+    output_file = str(new_dirname / "temp_list.json")
+
+    try:
+        with open(output_file, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+            gr.Success(f"临时对话列表已保存到 {output_file}")
+
+            return [
+                name,
+                f"当前 Session: **{name}**",
+                gr.update(choices=get_temp_lists()),
+            ]
+
+    except Exception as e:
+        gr.Error(f"保存临时对话列表失败，需手动更改 templist.json 中的音频路径: {e}")
+        print(f"Error: saving temp list. Modify audio paths templist.json {e}")
+        return [gr.update(), gr.update(), gr.update(choices=get_temp_lists())]
 
 
 def clean_temp_files(temp_dir: str):

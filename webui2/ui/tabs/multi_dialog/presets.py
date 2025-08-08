@@ -73,8 +73,9 @@ def on_save_preset_click(
 ):
     """Handle saving a preset"""
     if not preset_name or preset_name.strip() == "":
-        gr.Error("❌ 请输入预设名称")
-        return None
+        gr.Error("❌ 请输入要保存的预设名称")
+        print("[webui2] [Error] No preset name provided")
+        return gr.update()
 
     preset_name = preset_name.strip()
 

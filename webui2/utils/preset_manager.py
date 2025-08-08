@@ -6,7 +6,9 @@ import json
 import os
 from typing import Any, Dict, List, Optional
 
-from webui2.utils import server_audio_mgr
+import gradio as gr
+
+from .server_audio_manager import server_audio_mgr
 
 
 class PresetManager:
@@ -58,6 +60,7 @@ class PresetManager:
             return True
         except Exception as e:
             print(f"Error saving preset {preset_name}: {e}")
+            gr.Error(f"Error saving preset {preset_name}: {e}")
             return False
 
     def delete_preset(self, preset_name: str) -> bool:

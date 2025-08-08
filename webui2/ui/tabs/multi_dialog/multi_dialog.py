@@ -172,7 +172,9 @@ def create_multi_dialog_tab_page(session: gr.State):
             # Solve dynamic params passing problem with proxy state + hidden button + js click
             pick_args_proxy = gr.State([])
             with gr.Row():
-                md_session = gr.Markdown(value=f"当前为初始 Session {session.value}")
+                md_session = gr.Markdown(
+                    value=f"当前为初始对话 Session {session.value}"
+                )
                 collect_btn = gr.Button(
                     value="同步对话参数",
                     visible=True,
