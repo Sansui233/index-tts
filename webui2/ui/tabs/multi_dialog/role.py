@@ -3,7 +3,7 @@ from pathlib import Path
 
 import gradio as gr
 
-from webui2.utils import server_audio_manager
+from webui2.utils import server_audio_mgr
 
 
 def create_role(
@@ -28,7 +28,7 @@ def create_role(
             )
             gr_server_audio = gr.Dropdown(
                 label="选择服务器音频",
-                choices=server_audio_manager.get_flat_audio_choices(),
+                choices=server_audio_mgr.get_flat_audio_choices(),
                 key=f"speaker{i}_select_{audio_name}",
                 value=audioPath,
                 interactive=True,

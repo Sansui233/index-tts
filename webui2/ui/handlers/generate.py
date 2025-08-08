@@ -10,9 +10,7 @@ from scipy.io import wavfile
 
 from indextts.infer import IndexTTS
 from webui2.config import TEMP_DIR
-from webui2.utils import mix_audio_with_bgm
-from webui2.utils.subtitle_manager import SubtitleManager
-from webui2.utils.tts_manager import TTSManager
+from webui2.utils import SubtitleManager, TTSManager, mix_audio_with_bgm
 
 
 def gen_audio(

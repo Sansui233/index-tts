@@ -1,6 +1,6 @@
 import gradio as gr
 
-from webui2.utils import collect_preset_data, flatten_preset_config, preset_mgr
+from webui2.utils import preset_mgr
 
 
 def create_multi_dialog_presets():
@@ -90,7 +90,7 @@ def on_save_preset_click(
     for i in range(speaker_count):
         audio_data[f"speaker{str(i + 1)}_audio"] = speakers[i * 3 + 1]
 
-    preset_data = collect_preset_data(
+    preset_data = preset_mgr.collect_preset_data(
         speaker_count,
         speakers_data,
         audio_data,
@@ -152,7 +152,7 @@ def on_load_preset_click(preset_name):
         gr.Error("加载预设失败")
         return
 
-    config, speaker_count = flatten_preset_config(preset_data)
+    config, speaker_count = preset_mgr.flatten_preset_config(preset_data)
     speakers_data: list[tuple] = []
     for i in range(speaker_count):
         speakers_data.append(

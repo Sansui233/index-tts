@@ -169,7 +169,7 @@ class AudioSubtitleGenerator:
             command = f'"{ffmpeg_exe}" -y -i "{input_path}" -ac 1 -ar {self.sample_rate} "{output_path}"'
 
         try:
-            result = subprocess.run(
+            _ = subprocess.run(
                 command,
                 shell=True,
                 check=True,

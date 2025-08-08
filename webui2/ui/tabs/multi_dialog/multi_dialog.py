@@ -16,16 +16,16 @@ from webui2.ui.handlers.generate import (
     gen_multi_dialog_audio,
 )
 from webui2.ui.js.notify import notify_done
-from webui2.ui.tabs.multi_dialog.multi_dialog_templist import create_temp_list
 from webui2.utils import SubtitleManager, TTSManager
 
-from .multi_dialog_presets import (
+from .presets import (
     create_multi_dialog_presets,
     on_delete_preset_click,
     on_load_preset_click,
     on_save_preset_click,
 )
-from .multi_dialog_role import create_role
+from .role import create_role
+from .templist import create_temp_list
 
 
 def create_multi_dialog_tab_page(session: gr.State):

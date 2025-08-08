@@ -105,4 +105,4 @@ class ServerAudioManager:
 
 
 # Global instance
-server_audio_manager = ServerAudioManager()
+server_audio_mgr = ServerAudioManager()
