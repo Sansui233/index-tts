@@ -305,13 +305,13 @@ def create_multi_dialog_tab_page(session: gr.State):
     add_role_btn.click(
         fn=add_role,
         inputs=[st_speakers_data, st_speaker_count],
-        outputs=[st_speakers_data, st_speaker_count],
+        outputs=st_speaker_count,
     )
 
     remove_role_btn.click(
         fn=remove_role,
         inputs=[st_speakers_data, st_speaker_count],
-        outputs=[st_speakers_data, st_speaker_count],
+        outputs=st_speaker_count,
     )
 
 
@@ -335,14 +335,13 @@ def on_open_output_folder_click():
 def add_role(speakers_data, speaker_count):
     speaker_count += 1
     speakers_data.append((f"角色{speaker_count}", None))
-    return speakers_data, speaker_count
+    return speaker_count
 
 
 def remove_role(speakers_data, speaker_count):
     if len(speakers_data) > 1:
-        speakers_data = speakers_data[:-1]
         speaker_count -= 1
-    return speakers_data, speaker_count
+    return speaker_count
 
 
 def collect_pick_args(*args):

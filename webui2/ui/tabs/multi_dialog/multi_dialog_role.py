@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import gradio as gr
 
@@ -11,6 +12,7 @@ def create_role(
     speaker_data: tuple = (None, None),
 ):
     name, audioPath = speaker_data
+    audio_name = Path(audioPath).name if audioPath else None
     if name is None:
         name = f"角色{i + 1}"
     with gr.Column(elem_classes="multi_dialog-roles"):
@@ -27,7 +29,7 @@ def create_role(
             gr_server_audio = gr.Dropdown(
                 label="选择服务器音频",
                 choices=server_audio_manager.get_flat_audio_choices(),
-                key=f"speaker{i}_select_{audioPath}",
+                key=f"speaker{i}_select_{audio_name}",
                 value=audioPath,
                 interactive=True,
                 allow_custom_value=False,
@@ -36,7 +38,7 @@ def create_role(
         gr_audio = gr.Audio(
             label="参考音频",
             sources=["upload", "microphone"],
-            key=f"speaker{i}_wav_{audioPath}",
+            key=f"speaker{i}_{audio_name}",
             value=audioPath,
             type="filepath",
             interactive=True,
