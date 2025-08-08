@@ -172,11 +172,17 @@ def create_subtitle_controls():
 def create_header():
     return gr.HTML("""
 <header class="header-container">
-    <h1 class="main-title">IndexTTS: An Industrial-Level Controllable and Efficient Zero-Shot Text-To-Speech System</h1>
-    <h2 class="subtitle">(一款工业级可控且高效的零样本文本转语音系统)
-    <span class="arxiv-link">
-        <a href='https://arxiv.org/abs/2502.05512' aria-label="View on ArXiv">
-            <img src='https://img.shields.io/badge/ArXiv-2502.05512-red' alt='ArXiv:2502.05512'>
-        </a>
-    </span></h2>
+    <h1 class="main-title">IndexTTS
+        <span class="arxiv-link">
+            <a href='https://arxiv.org/abs/2502.05512' aria-label="View on ArXiv">
+                <img src='https://img.shields.io/badge/ArXiv-2502.05512-red' alt='ArXiv:2502.05512'>
+            </a>
+        </span>
+    </h1>
+    <p>
+      An Industrial-Level Controllable and Efficient Zero-Shot Text-To-Speech System
+    </p>
+    <p class="subtitle">
+      一款工业级可控且高效的零样本文本转语音系统
+    </p>
 </header>""")

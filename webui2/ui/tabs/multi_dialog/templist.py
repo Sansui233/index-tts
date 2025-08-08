@@ -234,7 +234,7 @@ def load_temp_list(
                 f"临时对话列表已加载: {len(temp_list)} 条记录\n文件\nsession: {session}"
             )
             print(f"[webui2] [Debug] load_temp_list: session set to {session}")
-            return [temp_list, session, f"当前 Session: **{session}**"]
+            return [temp_list, session, f"当前对话 Session: **{session}**"]
 
     except Exception as e:
         raise RuntimeError(f"Error when load_temp_list: {e}") from e
@@ -258,7 +258,7 @@ def rename_session(name: str, last_session: str, temp_list: list[tuple[str, str]
         dirname.rename(new_dirname)
         gr.Success(f"Session 已重命名为 {new_dirname}")
     except Exception as e:
-        gr.Error(f"重命名 Session 失败: {e}")
+        gr.Error(f"重命名对话失败: {e}")
         return [gr.update(), gr.update(), gr.update()]
 
     # replace temp_list
