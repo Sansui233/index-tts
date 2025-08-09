@@ -3,7 +3,7 @@ import gradio as gr
 from webui2.utils import preset_mgr
 
 
-def create_multi_dialog_presets():
+def create_multi_dialog_presets(role_session_state: gr.State):
     with gr.Row(elem_id="multi-dialog-presets"):
         # Preset components
         preset_dropdown = gr.Dropdown(
@@ -116,7 +116,7 @@ def on_save_preset_click(
     success = preset_mgr.save_preset(preset_name, preset_data)
 
     if success:
-        gr.Info(f"✅ 预设 '{preset_name}' 保存成功")
+        gr.Success(f"✅ 预设 '{preset_name}' 保存成功", duration=3)
     else:
         gr.Error(f"❌ 保存预设 '{preset_name}' 失败")
 
@@ -139,7 +139,7 @@ def on_delete_preset_click(preset_name):
     return on_refresh_preset_list()
 
 
-def on_load_preset_click(preset_name):
+def on_load_preset_click(preset_name, role_session_state):
     """Handle loading a preset"""
     if not preset_name:
         gr.Error("请选择一个预设")
@@ -185,5 +185,7 @@ def on_load_preset_click(preset_name):
 
     result.append(speaker_count)
     result.append(speakers_data)
+
+    role_session_state.truncate_path_state(speaker_count)
 
     return result

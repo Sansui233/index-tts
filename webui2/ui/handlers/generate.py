@@ -367,7 +367,7 @@ def merge_from_temp_files(
                     os.remove(silence_wav_path)
                 except Exception:
                     pass
-            gr.Success("Audio files have been successfully merged")
+            gr.Success(f"已合并音频到 {audio_output_path}", duration=3)
             print(f"Audio files have been successfully merged to: {audio_output_path}")
         return str(audio_output_path)
     else:
@@ -397,7 +397,7 @@ def merge_from_temp_files(
             return None
         mixed_audio = np.concatenate(audio_datas)
         wavfile.write(str(audio_output_path), sample_rate, mixed_audio)
-        gr.Success(f"合并音频已保存至 {audio_output_path}")
+        gr.Success(f"合并音频已保存至 {audio_output_path}", duration=3)
         print(f"[generate][Info] merged wav file saved to {audio_output_path}")
 
         return str(audio_output_path)

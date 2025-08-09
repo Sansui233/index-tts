@@ -79,7 +79,7 @@ class ServerAudioManager:
         # print("[webui2] [Debug] Flattened audio choices:", len(choices), "items")
         return choices
 
-    def is_server_audio(self, file_path: str) -> bool:
+    def is_server_audio(self, file_path: str | None) -> bool:
         """Check if a file path is a server audio file"""
         if not file_path:
             return False

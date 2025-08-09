@@ -209,7 +209,7 @@ def save_temp_list(temp_list: list[tuple[str, str]], session: str):
     try:
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-            gr.Success(f"临时对话列表已保存到 {output_file}")
+            gr.Success(f"临时对话列表已保存到 {output_file}", duration=3)
             return gr.update(choices=get_temp_lists())
     except Exception as e:
         gr.Error(f"保存临时对话列表失败: {e}")
@@ -256,7 +256,7 @@ def rename_session(name: str, last_session: str, temp_list: list[tuple[str, str]
     new_dirname = TEMP_DIR / name
     try:
         dirname.rename(new_dirname)
-        gr.Success(f"Session 已重命名为 {new_dirname}")
+        gr.Success(f"Session 已重命名为 {new_dirname}", duration=3)
     except Exception as e:
         gr.Error(f"重命名对话失败: {e}")
         return [gr.update(), gr.update(), gr.update()]
@@ -274,7 +274,7 @@ def rename_session(name: str, last_session: str, temp_list: list[tuple[str, str]
     try:
         with open(output_file, "w", encoding="utf-8") as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
-            gr.Success(f"临时对话列表已保存到 {output_file}")
+            gr.Success(f"临时对话列表已保存到 {output_file}", duration=3)
 
             return [
                 name,

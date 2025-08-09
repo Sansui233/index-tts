@@ -24,11 +24,11 @@ from .presets import (
     on_load_preset_click,
     on_save_preset_click,
 )
-from .role import create_role
+from .role import RoleSessionState, create_role
 from .templist import create_temp_list
 
 
-def create_multi_dialog_tab_page(session: gr.State):
+def create_multi_dialog_tab_page(session: gr.State, role_session_state: gr.State):
     tts_manager = TTSManager.get_instance()
     subtitle_manager = SubtitleManager.get_instance()
 
@@ -47,14 +47,17 @@ def create_multi_dialog_tab_page(session: gr.State):
         # Speaker configuration rows
         with gr.Column(scale=9):
             # preset part
-            gr.Markdown("### 预设", elem_id="anchor-multi_dialog_presets")
+            gr.Markdown(
+                "### 预设",
+                elem_id="anchor-multi_dialog_presets",
+            )
             (
                 preset_dropdown,
                 load_preset_btn,
                 preset_name_input,
                 save_preset_btn,
                 delete_preset_btn,
-            ) = create_multi_dialog_presets()
+            ) = create_multi_dialog_presets(role_session_state)
 
             # roles part
             gr.Markdown(
@@ -76,7 +79,9 @@ def create_multi_dialog_tab_page(session: gr.State):
                 with gr.Row():
                     for i in range(0, len(speakers_data)):
                         gr_speakers.extend(
-                            create_role(speakers_data, i, speakers_data[i])
+                            create_role(
+                                speakers_data, i, speakers_data[i], role_session_state
+                            )
                         )
 
                 bind_save_preset_click(gr_speakers)
@@ -214,7 +219,7 @@ def create_multi_dialog_tab_page(session: gr.State):
     # Bind events
     load_preset_btn.click(
         fn=on_load_preset_click,
-        inputs=[preset_dropdown],
+        inputs=[preset_dropdown, role_session_state],
         outputs=[
             # Speaker names
             # Settings
@@ -307,13 +312,13 @@ def create_multi_dialog_tab_page(session: gr.State):
     add_role_btn.click(
         fn=add_role,
         inputs=[st_speakers_data, st_speaker_count],
-        outputs=st_speaker_count,
+        outputs=[st_speakers_data, st_speaker_count],
     )
 
     remove_role_btn.click(
         fn=remove_role,
-        inputs=[st_speakers_data, st_speaker_count],
-        outputs=st_speaker_count,
+        inputs=[st_speakers_data, st_speaker_count, role_session_state],
+        outputs=[st_speakers_data, st_speaker_count],
     )
 
 
@@ -337,15 +342,17 @@ def on_open_output_folder_click():
 def add_role(speakers_data, speaker_count):
     speaker_count += 1
     speakers_data.append((f"角色{speaker_count}", None))
-    return speaker_count
+    return [speakers_data, speaker_count]
 
 
-def remove_role(speakers_data, speaker_count):
+def remove_role(speakers_data, speaker_count, role_session_state: RoleSessionState):
     if len(speakers_data) > 1:
         speaker_count -= 1
-    return speaker_count
+        speakers_data.pop()
+        role_session_state.truncate_path_state(speaker_count)
+    return [speakers_data, speaker_count]
 
 
 def collect_pick_args(*args):
-    gr.Success("已更新对话列表参数")
+    gr.Success("已更新对话列表参数", duration=3)
     return [*args]

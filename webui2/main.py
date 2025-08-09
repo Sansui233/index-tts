@@ -23,10 +23,12 @@ from webui2.config import (
 )
 from webui2.ui.common import create_header
 from webui2.ui.tabs import (
+    create_help,
     create_multi_dialog_tab_page,
     create_single_audio_tab_page,
     create_subtitle_only_tab_page,
 )
+from webui2.ui.tabs.multi_dialog.role import RoleSessionState
 from webui2.utils import TTSManager
 
 # Initialize environment
@@ -52,18 +54,21 @@ TTSManager.set_initialize_args(
 
 def create_webui():
     with gr.Blocks(
-        title="IndexTTS Demo",
+        title="IndexTTS WebUI2",
         css_paths=os.path.join("webui2", "ui", "styles", "style.css"),
     ) as demo:
         session = gr.State("")
+        role_session_state = gr.State(RoleSessionState())
 
         create_header()
         with gr.Tab("音频生成"):
             create_single_audio_tab_page(session)
         with gr.Tab("多人对话"):
-            create_multi_dialog_tab_page(session)
+            create_multi_dialog_tab_page(session, role_session_state)
         with gr.Tab("单独生成字幕"):
             create_subtitle_only_tab_page(session)
+        with gr.Tab("使用说明"):
+            create_help()
 
         # Gradio 这版本有 bug，首页不渲染个 Textbox 导致后面的 Textbox 渲染不出来
         gr.Textbox(label="444", visible=True, lines=1, elem_classes="display-none")

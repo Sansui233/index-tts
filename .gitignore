@@ -15,7 +15,7 @@ build/
 *.py[cod]
 *.egg-info/
 
-models/whisper*
+checkpoints/whisper*
 samples/*
 !samples/example1.wav
 temp_dialog/

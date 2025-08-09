@@ -111,10 +111,10 @@ class AudioSubtitleGenerator:
 
         # 模型路径映射 - 使用绝对路径
         self.model_dirs = {
-            "tiny": Path(root_dir) / "models" / "whisper-tiny",
-            "base": Path(root_dir) / "models" / "whisper-base",
-            "small": Path(root_dir) / "models" / "whisper-small",
-            "medium": Path(root_dir) / "models" / "whisper-medium",
+            "tiny": Path(root_dir) / "checkpoints" / "whisper" / "whisper-tiny",
+            "base": Path(root_dir) / "checkpoints" / "whisper" / "whisper-base",
+            "small": Path(root_dir) / "checkpoints" / "whisper" / "whisper-small",
+            "medium": Path(root_dir) / "checkpoints" / "whisper" / "whisper-medium",
         }
         self.asr_pipeline = None
         self.sample_rate = 16000
