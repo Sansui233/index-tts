@@ -21,7 +21,6 @@ index-tts 根目录
 ├── samples/      # 音频样本目录（新）
 ├── ...
 ├── webui2/       # WebUI2 目录（新）
-└── run_webui2.py # 启动脚本（新）
 ```
 
 ## 环境准备
@@ -38,8 +37,9 @@ pip install opencc
 ## 运行
 
 在 Index-tts 根目录下
+
 ```sh
-python run_webui2.py
+python -m webui2
 ```
 
 ## 使用
