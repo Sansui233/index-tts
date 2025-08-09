@@ -12,7 +12,7 @@ def create_help():
         ### 其他参数
 
         - 生成字幕：需在 `checkpoints/whisper` 目录下有 whisper 模型（如 `checkpoints/whisper/whisper-base/`）
-        - 背景音乐：未测试，不保证可用
+        - 背景音乐：仅供试用，未完全测试
         - 高级参数：top_p、top_k、temperature、num_beams 等，和原版一致
 
         ---
@@ -41,7 +41,7 @@ def create_help():
 
         ## 单独字幕生成
 
-        - 此功能仅供个人试用，未完全测试
+        - 仅供试用，未完全测试
 
         ---
 
@@ -51,6 +51,8 @@ def create_help():
         - UI消失：尝试翻页、重新加载。若无响应，保存内容后刷新页面
         - Bug报错不完善，请自行甄别。仅自用，商业合作除外
         - 单句生成时音频消失：翻页刷新组件，制成前记得同步参数
+
+        ---
 
         ## License
 
