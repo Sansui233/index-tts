@@ -421,7 +421,7 @@ def regenerate_single(
             gr.Error("TTS model is not initialized")
             raise ValueError("TTS model is not initialized")
 
-        print(f"[webui2][Debug] pick_args: {pick_args}")
+        # print(f"[webui2][Debug] pick_args: {pick_args}")
         [
             # from multi_dialog
             speakers_data,  # gr.State
@@ -539,13 +539,10 @@ def parse_dialogs(
                 dialog_lines[-1]["text"] += " " + text
             else:
                 dialog_lines.append({"speaker": speaker, "text": text})
+        elif line.startswith("(") or line.startswith("（"):  # comment line
+            continue
         else:
-            _, text = extract_speaker_and_text(line)
-            if text:
-                if dialog_lines:
-                    dialog_lines[-1]["text"] += " " + text
-                else:
-                    print(f"[webui2][Debug] 忽略行：无角色: {text}")
+            continue
 
     if not dialog_lines:
         progress(1.0, "未识别到有效对话")
