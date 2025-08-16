@@ -535,10 +535,10 @@ def parse_dialogs(
 
         if line.startswith("[") and "]" in line:
             speaker, text = extract_speaker_and_text(line)
-            if dialog_lines and dialog_lines[-1]["speaker"] == speaker:
-                dialog_lines[-1]["text"] += " " + text
-            else:
-                dialog_lines.append({"speaker": speaker, "text": text})
+            # if dialog_lines and dialog_lines[-1]["speaker"] == speaker:
+            #     dialog_lines[-1]["text"] += " " + text
+            # else:
+            dialog_lines.append({"speaker": speaker, "text": text})
         elif line.startswith("(") or line.startswith("（"):  # comment line
             continue
         else:
