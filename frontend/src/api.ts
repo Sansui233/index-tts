@@ -7,9 +7,14 @@ export interface Named {
 export interface Audio extends Named {
   path: string;
   size: number;
+  /* "samples": a file in samples/ referenced in place; path is relative to samples/. */
+  source?: "samples";
 }
 export interface Role extends Named {
   tags: string[];
+  /* Narrator, passers-by: may use any audio. */
+  anonymous: boolean;
+  /* The audio currently in samples/<name>/, read on each request; not stored. */
   audio_ids: string[];
 }
 export interface Binding {
@@ -88,7 +93,7 @@ export interface Cleanup {
   failures: unknown[];
 }
 
-async function request<T>(method: string, path: string, data?: unknown): Promise<T> {
+async function send(method: string, path: string, data?: unknown) {
   const form = data instanceof FormData;
   const response = await fetch("/api" + path, {
     method,
@@ -99,7 +104,19 @@ async function request<T>(method: string, path: string, data?: unknown): Promise
     const body = await response.json().catch(() => ({ detail: response.statusText }));
     throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
   }
-  return response.json();
+  return response;
+}
+
+async function request<T>(method: string, path: string, data?: unknown): Promise<T> {
+  return (await send(method, path, data)).json();
+}
+
+/* POST that answers with a file (e.g. a zip); saves it as `filename`. */
+export async function download(path: string, data: unknown, filename: string) {
+  const url = URL.createObjectURL(await (await send("POST", path, data)).blob());
+  Object.assign(document.createElement("a"), { href: url, download: filename }).click();
+  setTimeout(() => URL.revokeObjectURL(url), 10000);
+  return true;
 }
 
 export const api = {
@@ -121,6 +138,18 @@ export function upload(file: File) {
 
 export const isActive = (t: Task) => t.status === "queued" || t.status === "running";
 export const isAudio = (a: Audio) => !a.path.endsWith(".srt");
+
+/* Where an audio record comes from. Files from disk (samples, uploads) are named by their
+   file name; generated audio only has a display name (the file on disk is an id). */
+export type AudioKind = "sample" | "upload" | "speech" | "subtitle" | "merge" | "take";
+export function audioKind(a: Audio): AudioKind {
+  if (a.source === "samples") return "sample";
+  if (a.path.startsWith("audio/files/")) return "upload";
+  if (a.path.includes("/merged/")) return "merge";
+  if (a.path.includes("/takes/")) return "take";
+  return a.path.endsWith(".srt") ? "subtitle" : "speech";
+}
+export const GENERATED: Partial<Record<AudioKind, string>> = { speech: "语音生成", subtitle: "字幕", merge: "合并", take: "Take" };
 export const currentTake = (l: Line) => l.takes.find((t) => t.id === l.current_take_id);
 export const resultAudio = (t: Task) => (t.result && "path" in t.result ? t.result : null);
 export const taskTitle = (t: Task) => t.title || resultAudio(t)?.name || "";

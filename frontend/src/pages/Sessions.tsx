@@ -2,9 +2,13 @@ import type { MouseEvent } from "react";
 import { Folder, Layers, Plus, Scissors, Trash2 } from "react-feather";
 import { api, defaultGeneration, type Cleanup, type Named, type Preset, type Session } from "../api";
 import { go, useAction, useApp, useLoad, useStored } from "../state";
-import { ago, ask, confirm, Empty, NameInput, Page, PageHeader, Segmented, type DialogField } from "../ui";
+import { ago, ask, choose, confirm, Empty, NameInput, Page, PageHeader, Segmented, type Choice, type DialogField } from "../ui";
 
 type Sort = "updated_at" | "created_at" | "name";
+export const CLEANUP_CHOICES: Choice[] = [
+  { value: "all", label: "清理未使用的 Take 与已删除句子的音频", hint: "每句只保留当前 Take；台本中已删除句子的音频一并删除" },
+  { value: "orphans", label: "仅清理已删除句子的音频", hint: "现有句子的 Take 都保留" },
+];
 export const cleanupMessage = (r: Cleanup) =>
   `已清理 ${r.deleted} 个 Take，释放 ${(r.bytes / 1048576).toFixed(1)} MB${r.failures.length ? `，${r.failures.length} 项失败` : ""}`;
 
@@ -56,8 +60,10 @@ export function Sessions({ project, projects, reloadProjects }: { project?: Name
     if (ok) reloadProjects();
     return !!ok;
   }
-  async function cleanup() {
-    const result = await run(() => api.post<Cleanup>(`/projects/${project!.id}/takes/cleanup`));
+  async function cleanup(e: MouseEvent) {
+    const mode = await choose(e, "清理此项目所有 session 的音频", CLEANUP_CHOICES);
+    if (!mode) return;
+    const result = await run(() => api.post<Cleanup>(`/projects/${project!.id}/takes/cleanup?mode=${mode}`));
     if (!result) return;
     notify(cleanupMessage(result), result.failures.length > 0);
     void sessions.reload();
@@ -75,7 +81,7 @@ export function Sessions({ project, projects, reloadProjects }: { project?: Name
       <PageHeader title={project ? <NameInput className="max-w-[40rem]" label="项目名称" value={project.name} onSave={rename} /> : "最近的 Session"} sub={project ? `${sessions.data.length} 个 Session` : "所有项目中的多人对话与有声书章节"}>
         {project && (
           <div className="flex">
-            <button className="tip btn btn-ghost btn-icon" data-tip="清理未使用的 Take" aria-label="清理未使用的 Take" onClick={() => void cleanup()}>
+            <button className="tip btn btn-ghost btn-icon" data-tip="清理未使用的 Take" aria-label="清理未使用的 Take" onClick={(e) => void cleanup(e)}>
               <Scissors size={14} />
             </button>
             <button className="tip btn btn-ghost btn-icon btn-danger" data-tip="删除项目" aria-label="删除项目" onClick={(e) => void removeProject(e)}>

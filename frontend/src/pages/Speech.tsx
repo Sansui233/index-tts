@@ -23,9 +23,10 @@ export function Speech() {
   return (
     <Page>
       <PageHeader title="语音生成" sub="选择参考音频，把文本合成为语音" />
+      {/* Narrow: one column, 参考音频 first. Wide: editor and history left, settings right. */}
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="min-w-0 space-y-4">
-          <section className="card overflow-hidden focus-within:border-accent/50">
+        <div className="contents min-w-0 lg:block lg:space-y-4">
+          <section className="card order-2 overflow-hidden focus-within:border-accent/50">
             <textarea
               className="block min-h-56 w-full resize-y bg-transparent px-4 py-3.5 text-[14px] leading-relaxed outline-none placeholder:text-muted/70"
               placeholder="在这里输入要合成的文字…"
@@ -44,7 +45,7 @@ export function Speech() {
               </button>
             </div>
           </section>
-          <Section title="最近生成" extra={<span className="text-xs text-muted">{recent.length} 条</span>}>
+          <Section className="order-4" title="最近生成" extra={<span className="text-xs text-muted">{recent.length} 条</span>}>
             {recent.length ? (
               <div className="-my-2.5 divide-y divide-line">
                 {recent.map((t) => (
@@ -56,11 +57,11 @@ export function Speech() {
             )}
           </Section>
         </div>
-        <div className="space-y-4">
-          <Section title="参考音频">
+        <div className="contents lg:block lg:space-y-4">
+          <Section className="order-1" title="参考音频">
             <AudioPicker value={form.audio} onChange={(audio) => setForm({ ...form, audio })} />
           </Section>
-          <Section title="推理参数">
+          <Section className="order-3" title="推理参数">
             <GenerationParams value={form.generation} onChange={(generation) => setForm({ ...form, generation })} />
           </Section>
         </div>

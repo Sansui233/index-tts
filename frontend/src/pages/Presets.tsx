@@ -1,6 +1,6 @@
 import { useState, type MouseEvent } from "react";
 import { Bookmark, Plus, Trash2 } from "react-feather";
-import { api, defaultGeneration, type Audio, type Binding, type Generation, type Preset, type Role } from "../api";
+import { api, defaultGeneration, type Binding, type Generation, type Preset, type Role } from "../api";
 import { useAction, useLoad } from "../state";
 import { ago, confirm, Empty, Field, Page, PageHeader, Sheet } from "../ui";
 import { Bindings, GenerationParams } from "../widgets";
@@ -11,7 +11,6 @@ const toDraft = (p?: Preset): Draft => ({ id: p?.id, name: p?.name || "", bindin
 export function Presets() {
   const presets = useLoad<Preset[]>("/presets", []);
   const roles = useLoad<Role[]>("/roles", []);
-  const audio = useLoad<Audio[]>("/audio?reference=true", []);
   const [draft, setDraft] = useState<Draft | null>(null);
   const roleName = new Map(roles.data.map((r) => [r.id, r.name]));
 
@@ -65,7 +64,6 @@ export function Presets() {
         <PresetEditor
           draft={draft}
           roles={roles.data}
-          audio={audio.data}
           onClose={() => setDraft(null)}
           onSaved={() => {
             setDraft(null);
@@ -77,7 +75,7 @@ export function Presets() {
   );
 }
 
-function PresetEditor({ draft: initial, roles, audio, onClose, onSaved }: { draft: Draft; roles: Role[]; audio: Audio[]; onClose: () => void; onSaved: () => void }) {
+function PresetEditor({ draft: initial, roles, onClose, onSaved }: { draft: Draft; roles: Role[]; onClose: () => void; onSaved: () => void }) {
   const run = useAction();
   const [draft, setDraft] = useState(initial);
 
@@ -119,7 +117,7 @@ function PresetEditor({ draft: initial, roles, audio, onClose, onSaved }: { draf
         </Field>
         <div>
           <span className="label">说话人绑定</span>
-          <Bindings value={draft.bindings} onChange={(bindings) => setDraft({ ...draft, bindings })} roles={roles} audio={audio} />
+          <Bindings value={draft.bindings} onChange={(bindings) => setDraft({ ...draft, bindings })} roles={roles} />
         </div>
         <div>
           <span className="label">推理参数</span>

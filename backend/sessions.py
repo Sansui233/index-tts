@@ -2,7 +2,7 @@
 
 import shutil
 from copy import deepcopy
-from .dialogue import parse_dialogue
+from .audio import title
 from .storage import now, uid
 
 SORTS = {"name", "updated_at", "created_at"}
@@ -29,9 +29,9 @@ class Sessions:
 
     # Persistence
 
-    def save(self, session):
+    def save(self, session, touch=True):
         session["text"] = "\n".join(f"[{l['speaker']}] {l['text']}" for l in session["lines"])
-        saved = self.store.save("sessions", session)
+        saved = self.store.save("sessions", session, touch)
         # Mirror beside the generated files; the top-level record is used for listing.
         self.store.write_json(f"{folder(saved['project_id'], saved['id'])}/index.json", saved)
         return saved
@@ -89,10 +89,35 @@ class Sessions:
         target.parent.mkdir(parents=True, exist_ok=True)
         source.rename(target)
         for resource in self.store.list("audio"):
-            old = self.store.path(resource["path"])
+            old = self.audio.file(resource)
             if old.is_relative_to(source):
                 resource["path"] = self.store.relative(target / old.relative_to(source))
                 self.store.save("audio", resource)
+
+    def rebind(self, change, audio_map=None):
+        """Apply change(binding) -> bool to every session and preset binding, and audio_map
+        (old audio id -> new id for the same file) to take snapshots, so current takes don't
+        turn stale. Not a user edit: updated_at is kept."""
+        audio_map = audio_map or {}
+        with self.store.lock:
+            touched = []
+            for session in self.store.list("sessions"):
+                changed = [change(b) for b in session["bindings"]]
+                for line in session["lines"]:
+                    for take in line["takes"]:
+                        snapshot = take.get("snapshot", {})
+                        if snapshot.get("audio_id") in audio_map:
+                            snapshot["audio_id"] = audio_map[snapshot["audio_id"]]
+                            changed.append(True)
+                if any(changed):
+                    touched.append(session)
+            self.tasks.ensure_idle([s["id"] for s in touched])
+            presets = [p for p in self.store.list("presets") if any([change(b) for b in p["bindings"]])]
+            for session in touched:
+                self.save(session, touch=False)
+            for preset in presets:
+                self.store.save("presets", preset, touch=False)
+            return {"sessions": len(touched), "presets": len(presets)}
 
     def delete(self, key):
         with self.store.lock:
@@ -100,7 +125,7 @@ class Sessions:
             session = self.store.get("sessions", key)
             root = self.store.path(folder(session["project_id"], key))
             owned = [
-                r for r in self.store.list("audio") if self.store.path(r["path"]).is_relative_to(root)
+                r for r in self.store.list("audio") if self.audio.file(r).is_relative_to(root)
             ]
             if self.audio.referenced(exclude_session=key) & {r["id"] for r in owned}:
                 raise ValueError("session 音频仍被其他角色、session 或任务引用，请先解除引用")
@@ -135,14 +160,28 @@ class Sessions:
         session["lines"].append(line)
         return line
 
-    def replace_text(self, key, text):
-        parsed = parse_dialogue(text)
+    def apply_script(self, key, entries):
+        """Replace the line list from the 台本 editor, in the given order. An entry with a
+        line_id keeps that line (index, takes); a changed speaker or text bumps its revision.
+        Entries without one become new lines. Lines left out are removed, but their take
+        files stay until orphan cleanup, so a mistaken edit loses no audio right away."""
 
         def change(session):
-            if session["lines"]:
-                raise ValueError("已有句子请逐句编辑或新增，以保留 index 和 Take；批量文本用于空 session")
-            for fields in parsed:
-                self.add_line(session, fields)
+            kept = [e.line_id for e in entries if e.line_id]
+            if len(kept) != len(set(kept)):
+                raise ValueError("台本中同一句子出现了多次")
+            lines = []
+            for entry in entries:
+                fields = {"speaker": entry.speaker, "text": entry.text}
+                if not entry.line_id:
+                    lines.append(self.add_line(session, fields))
+                    continue
+                line = find_line(session, entry.line_id)
+                if (line["speaker"], line["text"]) != (entry.speaker, entry.text):
+                    line.update(fields)
+                    line["revision"] += 1
+                lines.append(line)
+            session["lines"] = lines
 
         return self.edit(key, change)
 
@@ -155,15 +194,34 @@ class Sessions:
         # Editing during generation is allowed; the revision keeps the user's selection.
         return self.edit(key, change, idle=False)
 
-    def delete_line(self, key, line_id):
+    def delete_lines(self, key, line_ids):
+        """Delete lines and their take files now (unlike 台本 removal, which keeps files)."""
+        ids = set(line_ids)
         with self.store.lock:
-            # Mark every take unused first, so failures keep the line for a retry.
-            self.edit(key, lambda s: find_line(s, line_id).update(current_take_id=None))
-            if self.cleanup([key], line_id)["failures"]:
+            # Mark every take unused first, so failures keep the lines for a retry.
+            def unmark(session):
+                for line_id in ids:
+                    find_line(session, line_id)["current_take_id"] = None
+
+            self.edit(key, unmark)
+            if self.cleanup([key], ids)["failures"]:
                 raise ValueError("部分 Take 删除失败，请重试清理后再删除句子")
-            return self.edit(
-                key, lambda s: s.update(lines=[l for l in s["lines"] if l["id"] != line_id])
-            )
+            return self.edit(key, lambda s: s.update(lines=[l for l in s["lines"] if l["id"] not in ids]))
+
+    def archive(self, key, line_ids):
+        """(name in zip, file) for the current take of each given line, in session order.
+        Lines without a current take are skipped."""
+        session = self.store.get("sessions", key)
+        ids = set(line_ids)
+        entries = []
+        for position, line in enumerate(session["lines"], 1):
+            take = current_take(line)
+            if line["id"] not in ids or not take or not take.get("audio_id"):
+                continue
+            path = self.audio.path(take["audio_id"])
+            name = title(f"{position:03d} #{line['index']} {line['speaker']} {line['text']}", 60)
+            entries.append((name + path.suffix, path))
+        return entries
 
     def reorder(self, key, line_ids):
         def change(session):
@@ -251,8 +309,9 @@ class Sessions:
     def add_output(self, key, audio_id):
         return self.edit(key, lambda s: s["outputs"].append(audio_id), idle=False)
 
-    def cleanup(self, session_ids, line_id=None):
-        """Delete non-current takes; failures are reported and kept for retry."""
+    def cleanup(self, session_ids, line_ids=None, unused=True, orphans=False):
+        """Delete non-current takes (unused) and/or the take files of lines that no longer
+        exist (orphans). Failures are reported and kept for retry."""
         with self.store.lock:
             self.tasks.ensure_idle(session_ids)
             result = {"deleted": 0, "bytes": 0, "failures": []}
@@ -260,7 +319,11 @@ class Sessions:
             protected = {self.store.get("audio", i)["path"] for i in self.audio.referenced()}
             for key in session_ids:
                 session = self.store.get("sessions", key)
-                lines = [find_line(session, line_id)] if line_id else session["lines"]
+                if orphans:
+                    self._delete_orphans(session, protected, result)
+                if not unused:
+                    continue
+                lines = [find_line(session, i) for i in line_ids] if line_ids else session["lines"]
                 for line in lines:
                     allowed = self.store.path(f"{folder(session['project_id'], key)}/takes/{line['id']}")
                     keep = []
@@ -279,6 +342,37 @@ class Sessions:
                     line["takes"] = keep
                 self.save(session)
             return result
+
+    def _delete_orphans(self, session, protected, result):
+        """Remove takes/<line_id>/ folders whose line is gone, with their audio records."""
+        root = self.store.path(f"{folder(session['project_id'], session['id'])}/takes")
+        live = {line["id"] for line in session["lines"]}
+        orphaned = [d for d in root.iterdir() if d.is_dir() and d.name not in live] if root.exists() else []
+        if not orphaned:
+            return
+        records = [r for r in self.store.list("audio") if r.get("source") != "samples"]
+        for directory in orphaned:
+            for record in records:
+                if not self.audio.file(record).is_relative_to(directory):
+                    continue
+                if record["path"] in protected:
+                    result["failures"].append({"session_id": session["id"], "index": None, "take_id": None, "error": f"{record['name']} 仍被引用"})
+                    continue
+                self.store.delete("audio", record["id"])
+            # Files without a record (e.g. an interrupted generation) go too.
+            for path in sorted(directory.rglob("*"), reverse=True):
+                if path.is_file() and self.store.relative(path) not in protected:
+                    try:
+                        size = path.stat().st_size
+                        path.unlink()
+                        result["bytes"] += size
+                        result["deleted"] += 1
+                    except OSError as error:
+                        result["failures"].append({"session_id": session["id"], "index": None, "take_id": None, "error": str(error)})
+                elif path.is_dir() and not any(path.iterdir()):
+                    path.rmdir()
+            if not any(directory.iterdir()):
+                directory.rmdir()
 
     def _delete_take(self, take, allowed, protected):
         if not take.get("audio_id"):

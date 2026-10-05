@@ -15,9 +15,8 @@ checkpoints/*
 !checkpoints/config.yaml
 !checkpoints/config2.yaml
 
-# User data: reference audio, legacy outputs, webui data (roles, sessions, takes)
+# User data: reference audio, webui data (roles, sessions, takes)
 samples
-outputs/
 data/
 
 # Pruned legacy files awaiting manual deletion

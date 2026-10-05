@@ -13,8 +13,11 @@ class Named(Input):
 
 
 class Role(Named):
+    """Reference audio is not stored: it is whatever samples/<name>/ holds.
+    An anonymous role (narrator, passers-by) may use any audio instead."""
+
     tags: list[str] = Field(default_factory=list)
-    audio_ids: list[str] = Field(default_factory=list)
+    anonymous: bool = False
 
 
 class Binding(Input):
@@ -47,8 +50,16 @@ class SessionInput(Preset):
     interval: float = Field(default=0.5, ge=0, le=30)
 
 
-class TextInput(Input):
-    text: str = Field(max_length=1000000)
+class ScriptLine(Input):
+    """One line of the 台本: line_id keeps an existing line, None adds one."""
+
+    line_id: str | None = None
+    speaker: str = Field(min_length=1, max_length=200)
+    text: str = Field(min_length=1, max_length=20000)
+
+
+class Script(Input):
+    lines: list[ScriptLine] = Field(max_length=20000)
 
 
 class LineInput(Input):

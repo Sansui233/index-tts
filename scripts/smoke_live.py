@@ -5,7 +5,6 @@ import time
 import wave
 import io
 import httpx
-from backend.config import DATA
 
 
 def run():
@@ -88,9 +87,6 @@ def run():
         result["subtitle_error"] = str(error)
     finish(request("POST", "/models/unload"))
     result["final_model_state"] = request("GET", "/models")["state"]
-    (DATA / "migrations/live-verification.json").write_text(
-        json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
-    )
     print(json.dumps(result, ensure_ascii=False, indent=2), flush=True)
     client.close()
 

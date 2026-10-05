@@ -24,9 +24,13 @@ interface Props {
   last: boolean;
   onChange: (s: Session) => void;
   move: (direction: number) => void;
+  /* Multi-select mode: a checkbox replaces the move arrows. */
+  selecting?: boolean;
+  selected?: boolean;
+  onSelect?: () => void;
 }
 
-export function LineRow({ line, session, busy, first, last, onChange, move }: Props) {
+export function LineRow({ line, session, busy, first, last, onChange, move, selecting, selected, onSelect }: Props) {
   const run = useAction();
   const { track, notify } = useApp();
   const [text, setText] = useState(line.text);
@@ -67,19 +71,35 @@ export function LineRow({ line, session, busy, first, last, onChange, move }: Pr
   }
 
   return (
-    <div className={cx("group border-b border-line last:border-0", busy && "bg-accent-soft/40")}>
+    <div className={cx("group relative border-b border-line last:border-0", busy && "bg-accent-soft/40", selected && "bg-accent-soft/70")}>
+      {selecting && (
+        // The whole row toggles; its inputs and players stay out of reach while selecting.
+        <button
+          className="absolute inset-0 z-10 cursor-pointer transition-colors hover:bg-fg/[0.06] focus-visible:bg-fg/[0.06] focus-visible:outline-none"
+          aria-pressed={!!selected}
+          aria-label={`选择 #${line.index}`}
+          onClick={onSelect}
+        />
+      )}
       <div className="grid grid-cols-[44px_112px_minmax(0,1fr)] items-start gap-x-2 px-3 py-1.5 lg:grid-cols-[44px_112px_minmax(0,1fr)_230px_64px]">
-        <div className="flex h-8 items-center gap-0.5 text-xs text-muted tabular-nums">
-          <span className="group-hover:hidden">#{line.index}</span>
-          <span className="hidden group-hover:flex">
-            <button className="cursor-pointer rounded p-0.5 hover:bg-hover hover:text-fg disabled:opacity-30" disabled={first} onClick={() => move(-1)} aria-label="上移">
-              <ArrowUp size={12} />
-            </button>
-            <button className="cursor-pointer rounded p-0.5 hover:bg-hover hover:text-fg disabled:opacity-30" disabled={last} onClick={() => move(1)} aria-label="下移">
-              <ArrowDown size={12} />
-            </button>
+        {selecting ? (
+          <span className="flex h-8 items-center gap-2 text-xs text-muted tabular-nums">
+            <input type="checkbox" tabIndex={-1} readOnly aria-hidden className="pointer-events-none size-4 accent-[var(--accent)]" checked={!!selected} />
+            #{line.index}
           </span>
-        </div>
+        ) : (
+          <div className="flex h-8 items-center gap-0.5 text-xs text-muted tabular-nums">
+            <span className="group-hover:hidden">#{line.index}</span>
+            <span className="hidden group-hover:flex">
+              <button className="cursor-pointer rounded p-0.5 hover:bg-hover hover:text-fg disabled:opacity-30" disabled={first} onClick={() => move(-1)} aria-label="上移">
+                <ArrowUp size={12} />
+              </button>
+              <button className="cursor-pointer rounded p-0.5 hover:bg-hover hover:text-fg disabled:opacity-30" disabled={last} onClick={() => move(1)} aria-label="下移">
+                <ArrowDown size={12} />
+              </button>
+            </span>
+          </div>
+        )}
         <select
           className={cx("input h-8 truncate border-transparent bg-transparent px-1.5 font-medium text-accent hover:border-line", unbound && "text-warn")}
           title={unbound ? "该说话人未绑定参考音频" : line.speaker}

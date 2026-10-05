@@ -81,9 +81,11 @@ class Store:
         finally:
             temporary.unlink(missing_ok=True)
 
-    def save(self, kind, record):
+    def save(self, kind, record, touch=True):
+        """touch=False keeps updated_at: for consistency fixes that aren't user edits."""
         with self.lock:
-            record["updated_at"] = now()
+            if touch:
+                record["updated_at"] = now()
             self.write_json(self.record_path(kind, record["id"]), record)
             return record
 

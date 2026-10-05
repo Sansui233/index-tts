@@ -1,14 +1,8 @@
 """Queue GPU work on the single task worker: speech, subtitles, session takes, merge."""
 
-import re
 from pathlib import Path
+from .audio import title
 from .sessions import current_take, folder
-
-
-def file_name(text, suffix, limit=40):
-    """Readable download name from user text; drops characters Windows forbids."""
-    stem = re.sub(r'[\\/:*?"<>|\s]+', " ", text).strip()[:limit].strip()
-    return (stem or "output") + suffix
 
 
 class Generation:
@@ -29,7 +23,7 @@ class Generation:
             path = self.audio.new_path(".wav", "outputs")
             try:
                 self.engine.infer(source, request.text, path, request.generation.model_dump(), progress)
-                return self.audio.register(path, file_name(request.text, ".wav"))
+                return self.audio.register(path, title(request.text))
             except Exception:
                 path.unlink(missing_ok=True)
                 raise
@@ -43,7 +37,7 @@ class Generation:
         def run(progress):
             path = self.audio.new_path(".srt", "outputs")
             self.engine.subtitles(source, path, request.model, request.language, progress)
-            return self.audio.register(path, file_name(Path(name).stem, ".srt", 80))
+            return self.audio.register(path, title(Path(name).stem, 80))
 
         return self.tasks.submit("subtitles", run, audio_ids=[request.audio_id], title=name)
 
@@ -101,6 +95,6 @@ class Generation:
             combined += (gap if index else AudioSegment.empty()) + AudioSegment.from_file(path)
         output = self.audio.new_path(".wav", f"{folder(session['project_id'], key)}/merged")
         combined.export(output, format="wav")
-        record = self.audio.register(output, session["name"] + ".wav")
+        record = self.audio.register(output, title(session["name"], 80))
         self.sessions.add_output(key, record["id"])
         return record

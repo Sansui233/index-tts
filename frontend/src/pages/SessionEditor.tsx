@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
-import { AlertTriangle, ArrowLeft, ChevronRight, FileText, Layers, Play, Plus, Scissors, Settings } from "react-feather";
-import { api, isActive, type Cleanup, type Named, type Session, type Task } from "../api";
+import { useEffect, useMemo, useState, type MouseEvent } from "react";
+import { AlertTriangle, ArrowLeft, BookOpen, CheckSquare, ChevronRight, Download, FileText, Layers, Play, Plus, Scissors, Settings, Trash2 } from "react-feather";
+import { api, download, isActive, type Cleanup, type Named, type Session, type Task } from "../api";
 import { Player } from "../player";
 import { go, useAction, useApp } from "../state";
-import { cx, NameInput, Progress, Section, Spinner } from "../ui";
+import { choose, confirm, cx, Empty, NameInput, Progress, Section, Spinner } from "../ui";
 import { isStale, LineRow } from "./LineRow";
-import { cleanupMessage } from "./Sessions";
+import { CLEANUP_CHOICES, cleanupMessage } from "./Sessions";
+import { ScriptEditor } from "./ScriptEditor";
 import { SessionSettings, toDraft } from "./SessionSettings";
 
 const PAGE = 50;
@@ -16,6 +17,9 @@ export function SessionEditor({ id, projects, back }: { id: string; projects: Na
   const [session, setSession] = useState<Session | null>(null);
   const [draft, setDraft] = useState<ReturnType<typeof toDraft> | null>(null);
   const [settings, setSettings] = useState(false);
+  const [script, setScript] = useState(false);
+  // Multi-select mode: null when off.
+  const [picked, setPicked] = useState<Set<string> | null>(null);
   const [page, setPage] = useState(0);
   const base = `/sessions/${id}`;
 
@@ -62,11 +66,38 @@ export function SessionEditor({ id, projects, back }: { id: string; projects: Na
     const s = await run(() => api.put<Session>(base + "/order", { line_ids: ids }));
     if (s) setSession(s);
   }
-  async function cleanup() {
-    const result = await run(() => api.post<Cleanup>(base + "/takes/cleanup"));
+  async function cleanup(e: MouseEvent) {
+    const mode = await choose(e, "清理此 session 的音频", CLEANUP_CHOICES);
+    if (!mode) return;
+    const result = await run(() => api.post<Cleanup>(`${base}/takes/cleanup?mode=${mode}`));
     if (!result) return;
     notify(cleanupMessage(result), result.failures.length > 0);
     void load();
+  }
+  const chosen = picked ? session.lines.filter((l) => picked.has(l.id)).map((l) => l.id) : [];
+  const toggle = (lineId: string) =>
+    setPicked((p) => {
+      const next = new Set(p);
+      if (!next.delete(lineId)) next.add(lineId);
+      return next;
+    });
+  async function downloadPicked() {
+    await run(() => download(`${base}/lines/download`, { ids: chosen }, `${session!.name}.zip`));
+  }
+  async function cleanupPicked(e: MouseEvent) {
+    if (!(await confirm(e, `清理所选 ${chosen.length} 句中未使用的 Take？每句保留当前 Take。`, "清理"))) return;
+    const result = await run(() => api.post<Cleanup>(`${base}/lines/takes/cleanup`, { ids: chosen }));
+    if (!result) return;
+    notify(cleanupMessage(result), result.failures.length > 0);
+    void load();
+  }
+  async function deletePicked(e: MouseEvent) {
+    const takes = session!.lines.filter((l) => picked!.has(l.id)).reduce((n, l) => n + l.takes.length, 0);
+    if (!(await confirm(e, `删除所选 ${chosen.length} 句及其 ${takes} 个 Take？`))) return;
+    const s = await run(() => api.post<Session>(`${base}/lines/delete`, { ids: chosen }));
+    if (!s) return;
+    setSession(s);
+    setPicked(new Set());
   }
   async function rename(name: string) {
     // Save the stored settings with only the name changed; unsaved edits in the draft stay.
@@ -101,7 +132,11 @@ export function SessionEditor({ id, projects, back }: { id: string; projects: Na
             <Settings size={14} />
             <span className="hidden md:inline">设置</span>
           </button>
-          <button className="btn btn-ghost" title="清理所有非当前 Take" disabled={!!active.length} onClick={() => void cleanup()}>
+          <button className="btn btn-ghost" title="编辑台本：批量增删改句子" onClick={() => setScript(true)}>
+            <BookOpen size={14} />
+            <span className="hidden md:inline">台本</span>
+          </button>
+          <button className="btn btn-ghost" title="清理 Take" disabled={!!active.length} onClick={(e) => void cleanup(e)}>
             <Scissors size={14} />
             <span className="hidden md:inline">清理</span>
           </button>
@@ -139,6 +174,34 @@ export function SessionEditor({ id, projects, back }: { id: string; projects: Na
               未绑定：{missing.join("、")} · 去绑定
             </button>
           )}
+          <span className="flex-1" />
+          {picked && (
+            <span className="flex items-center gap-0.5">
+              <span className="mr-1 text-xs text-muted">已选 {chosen.length}</span>
+              <button className="btn btn-ghost btn-sm" onClick={() => setPicked(chosen.length === session.lines.length ? new Set() : new Set(session.lines.map((l) => l.id)))}>
+                {chosen.length === session.lines.length ? "全不选" : "全选"}
+              </button>
+              <button className="tip btn btn-ghost btn-sm btn-icon" data-tip="下载所选的当前 Take（zip）" aria-label="下载所选" disabled={!chosen.length} onClick={() => void downloadPicked()}>
+                <Download size={14} />
+              </button>
+              <button className="tip btn btn-ghost btn-sm btn-icon" data-tip="清理所选句子未使用的 Take" aria-label="清理所选" disabled={!chosen.length || !!active.length} onClick={(e) => void cleanupPicked(e)}>
+                <Scissors size={14} />
+              </button>
+              <button className="tip btn btn-ghost btn-sm btn-icon btn-danger" data-tip="删除所选句子" aria-label="删除所选" disabled={!chosen.length || !!active.length} onClick={(e) => void deletePicked(e)}>
+                <Trash2 size={14} />
+              </button>
+            </span>
+          )}
+          {session.lines.length > 0 && (
+            <button
+              className={cx("tip btn btn-ghost btn-sm btn-icon", picked && "bg-hover text-fg")}
+              data-tip={picked ? "退出多选" : "多选"}
+              aria-label="多选"
+              onClick={() => setPicked(picked ? null : new Set())}
+            >
+              <CheckSquare size={14} />
+            </button>
+          )}
         </div>
 
         {settings && (
@@ -169,12 +232,21 @@ export function SessionEditor({ id, projects, back }: { id: string; projects: Na
                 last={page * PAGE + i === session.lines.length - 1}
                 onChange={updated}
                 move={(d) => void move(line.id, d)}
+                selecting={!!picked}
+                selected={picked?.has(line.id)}
+                onSelect={() => toggle(line.id)}
               />
             ))}
             <AddLine session={session} onAdded={updated} />
           </div>
         ) : (
-          <ImportText session={session} onImported={updated} />
+          <Section>
+            <Empty icon={<BookOpen size={18} />} title="还没有句子">
+              <button className="btn btn-primary mt-3" onClick={() => setScript(true)}>
+                编辑台本
+              </button>
+            </Empty>
+          </Section>
         )}
 
         {pages > 1 && (
@@ -210,6 +282,16 @@ export function SessionEditor({ id, projects, back }: { id: string; projects: Na
           </Section>
         )}
       </div>
+      {script && (
+        <ScriptEditor
+          session={session}
+          onClose={() => setScript(false)}
+          onApplied={(s) => {
+            setSession(s);
+            setScript(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -239,27 +321,5 @@ function AddLine({ session, onAdded }: { session: Session; onAdded: (s: Session)
         添加
       </button>
     </div>
-  );
-}
-
-function ImportText({ session, onImported }: { session: Session; onImported: (s: Session) => void }) {
-  const run = useAction();
-  const [text, setText] = useState("");
-  const count = text.split("\n").filter((l) => /^\s*\[[^\]]+\]\s*\S/.test(l)).length;
-  async function submit() {
-    const s = await run(() => api.put<Session>(`/sessions/${session.id}/text`, { text }));
-    if (s) onImported(s);
-  }
-  return (
-    <Section title="导入文本" extra={<span className="text-xs text-muted">每行 [说话人] 文本，括号开头的行视为注释</span>}>
-      <textarea className="input min-h-64 font-mono text-[13px]" placeholder={"[旁白] 故事从这里开始。\n[小明] 你好！\n（这一行是注释）"} value={text} onChange={(e) => setText(e.target.value)} />
-      <div className="mt-3 flex items-center justify-end gap-3">
-        <span className="mr-auto text-xs text-muted">解析后点击顶部提示，为每位说话人绑定参考音频</span>
-        <span className="text-xs text-muted">识别到 {count} 句</span>
-        <button className="btn btn-primary" disabled={!count} onClick={() => void submit()}>
-          解析并创建句子
-        </button>
-      </div>
-    </Section>
   );
 }

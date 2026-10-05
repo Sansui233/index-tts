@@ -1,5 +1,5 @@
 import { Bookmark, Save } from "react-feather";
-import { api, type Audio, type Named, type Preset, type Role, type Session } from "../api";
+import { api, type Named, type Preset, type Role, type Session } from "../api";
 import { useAction, useLoad } from "../state";
 import { ask, Field } from "../ui";
 import { Bindings, GenerationParams } from "../widgets";
@@ -10,7 +10,6 @@ export const toDraft = ({ name, project_id, interval, bindings, generation }: Se
 export function SessionSettings({ draft, setDraft, session, projects, onSaved }: { draft: Draft; setDraft: (d: Draft) => void; session: Session; projects: Named[]; onSaved: (s: Session) => void }) {
   const run = useAction();
   const roles = useLoad<Role[]>("/roles", []);
-  const audio = useLoad<Audio[]>("/audio?reference=true", []);
   const dirty = JSON.stringify(draft) !== JSON.stringify(toDraft(session));
 
   async function savePreset() {
@@ -55,7 +54,7 @@ export function SessionSettings({ draft, setDraft, session, projects, onSaved }:
               存为预设
             </button>
           </div>
-          <Bindings value={draft.bindings} onChange={(bindings) => setDraft({ ...draft, bindings })} roles={roles.data} audio={audio.data} />
+          <Bindings value={draft.bindings} onChange={(bindings) => setDraft({ ...draft, bindings })} roles={roles.data} />
         </div>
       </div>
       <div className="flex flex-col gap-4">

@@ -1,13 +1,22 @@
 """HTTP surface. Handlers only translate requests; services hold the rules."""
 
+import os
+import tempfile
+import zipfile
 from types import SimpleNamespace
+from typing import Literal
 from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
 from . import schemas as S
+from .audio import title
 from .engine import WHISPER_MODELS, whisper_path
 from .sessions import find_line
 
 DELETED = {"deleted": True}
+# all: unused takes and audio of deleted lines; orphans: only audio of deleted lines.
+CleanupMode = Literal["all", "orphans"]
+CLEANUP = {"all": {"unused": True, "orphans": True}, "orphans": {"unused": False, "orphans": True}}
 
 
 def build_router(app: SimpleNamespace):
@@ -85,9 +94,14 @@ def build_router(app: SimpleNamespace):
 
     @api.get("/audio")
     def list_audio(reference: bool = False):
-        """reference=true: only uploaded/imported reference audio, not takes or outputs."""
+        """reference=true: only reference audio (uploads, imports, role sample folders), not takes or outputs."""
+        if reference:
+            for role in store.list("roles"):
+                audio.folder(role["name"])  # register new sample files before listing
         records = store.list("audio", newest=True)
-        return [r for r in records if r["path"].startswith("audio/files/")] if reference else records
+        if not reference:
+            return records
+        return [r for r in records if r.get("source") == "samples" or r["path"].startswith("audio/files/")]
 
     @api.get("/audio/sources")
     def audio_sources():
@@ -104,8 +118,10 @@ def build_router(app: SimpleNamespace):
 
     @api.get("/audio/{key}/file")
     def audio_file(key: str, download: bool = False):
-        name = store.get("audio", key)["name"]
-        return FileResponse(audio.path(key), filename=name if download else None)
+        path, name = audio.path(key), store.get("audio", key)["name"]
+        # Generated audio has a display name without extension; downloads get the real one.
+        filename = name if name.lower().endswith(path.suffix.lower()) else name + path.suffix
+        return FileResponse(path, filename=filename if download else None)
 
     @api.get("/audio/{key}")
     def get_audio(key: str):
@@ -119,15 +135,27 @@ def build_router(app: SimpleNamespace):
 
     @api.get("/roles")
     def list_roles():
-        return store.list("roles", newest=True)
+        return [library.view(r) for r in store.list("roles", newest=True)]
 
     @api.post("/roles")
     def create_role(request: S.Role):
-        return library.save_role(request)
+        return library.view(library.save_role(request))
 
     @api.put("/roles/{key}")
     def update_role(key: str, request: S.Role):
-        return library.save_role(request, key)
+        with store.lock:
+            # Renaming switches folders: point bindings at the same files in the new one.
+            mapping = library.rebind_plan(key, request)
+            if mapping:
+
+                def change(binding):
+                    if binding.get("role_id") != key or binding.get("audio_id") not in mapping:
+                        return False
+                    binding["audio_id"] = mapping[binding["audio_id"]]
+                    return True
+
+                sessions.rebind(change, mapping)
+            return library.view(library.save_role(request, key))
 
     @api.delete("/roles/{key}")
     def delete_role(key: str):
@@ -175,9 +203,9 @@ def build_router(app: SimpleNamespace):
         return DELETED
 
     @api.post("/projects/{key}/takes/cleanup")
-    def cleanup_project(key: str):
+    def cleanup_project(key: str, mode: CleanupMode = "all"):
         store.get("projects", key)
-        return sessions.cleanup([s["id"] for s in sessions.of_project(key)])
+        return sessions.cleanup([s["id"] for s in sessions.of_project(key)], **CLEANUP[mode])
 
     # Sessions
 
@@ -203,9 +231,9 @@ def build_router(app: SimpleNamespace):
         sessions.delete(key)
         return DELETED
 
-    @api.put("/sessions/{key}/text")
-    def replace_text(key: str, request: S.TextInput):
-        return sessions.replace_text(key, request.text)
+    @api.put("/sessions/{key}/script")
+    def apply_script(key: str, request: S.Script):
+        return sessions.apply_script(key, request.lines)
 
     @api.put("/sessions/{key}/order")
     def reorder(key: str, request: S.Order):
@@ -220,8 +248,8 @@ def build_router(app: SimpleNamespace):
         return generation.merge(key)
 
     @api.post("/sessions/{key}/takes/cleanup")
-    def cleanup_session(key: str):
-        return sessions.cleanup([key])
+    def cleanup_session(key: str, mode: CleanupMode = "all"):
+        return sessions.cleanup([key], **CLEANUP[mode])
 
     # Lines
 
@@ -235,7 +263,7 @@ def build_router(app: SimpleNamespace):
 
     @api.delete("/sessions/{key}/lines/{line_id}")
     def delete_line(key: str, line_id: str):
-        return sessions.delete_line(key, line_id)
+        return sessions.delete_lines(key, [line_id])
 
     @api.post("/sessions/{key}/lines/{line_id}/generate", status_code=202)
     def generate_line(key: str, line_id: str):
@@ -252,6 +280,30 @@ def build_router(app: SimpleNamespace):
 
     @api.post("/sessions/{key}/lines/{line_id}/takes/cleanup")
     def cleanup_line(key: str, line_id: str):
-        return sessions.cleanup([key], line_id)
+        return sessions.cleanup([key], [line_id])
+
+    # Several lines at once (multi-select in the session editor)
+
+    @api.post("/sessions/{key}/lines/delete")
+    def delete_lines(key: str, request: S.Ids):
+        return sessions.delete_lines(key, request.ids)
+
+    @api.post("/sessions/{key}/lines/takes/cleanup")
+    def cleanup_lines(key: str, request: S.Ids):
+        return sessions.cleanup([key], request.ids)
+
+    @api.post("/sessions/{key}/lines/download")
+    def download_lines(key: str, request: S.Ids):
+        """Zip of the current take of each selected line, named by order, index and text."""
+        entries = sessions.archive(key, request.ids)
+        if not entries:
+            raise ValueError("所选句子都还没有生成音频")
+        handle, name = tempfile.mkstemp(suffix=".zip")
+        os.close(handle)
+        with zipfile.ZipFile(name, "w", zipfile.ZIP_STORED) as archive:
+            for arcname, path in entries:
+                archive.write(path, arcname)
+        filename = title(store.get("sessions", key)["name"], 80) + ".zip"
+        return FileResponse(name, filename=filename, background=BackgroundTask(os.unlink, name))
 
     return api

@@ -93,8 +93,10 @@ function FileActions({ id, download = true, rename = false }: { id: string; down
     const at = point(e);
     const record = await run(() => api.get<Audio>(`/audio/${id}`));
     if (!record) return;
-    const dot = record.name.lastIndexOf(".");
-    const [stem, ext] = dot > 0 ? [record.name.slice(0, dot), record.name.slice(dot)] : [record.name, ""];
+    // Generated audio has a display name without extension; a real file name keeps its own.
+    const suffix = record.path.slice(record.path.lastIndexOf("."));
+    const ext = record.name.toLowerCase().endsWith(suffix.toLowerCase()) ? record.name.slice(-suffix.length) : "";
+    const stem = record.name.slice(0, record.name.length - ext.length);
     const next = await promptAt(at, `重命名${ext ? `（保留 ${ext}）` : ""}`, stem, "重命名");
     const clean = next?.replace(/[\\/:*?"<>|]+/g, " ").trim();
     if (!clean || clean === stem) return;

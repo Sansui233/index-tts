@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { Check, Copy, Edit2, X } from "react-feather";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Check, ChevronDown, Copy, Edit2, X } from "react-feather";
 
 export const cx = (...names: (string | false | null | undefined)[]) => names.filter(Boolean).join(" ");
 
@@ -143,7 +143,13 @@ interface ConfirmRequest {
   message: string;
   action: string;
   input?: string;
+  choices?: Choice[];
   resolve: (value: string | null) => void;
+}
+export interface Choice {
+  value: string;
+  label: string;
+  hint?: string;
 }
 type Anchor = { clientX: number; clientY: number; currentTarget: EventTarget | null };
 let showDialog: (request: DialogRequest) => void = () => {};
@@ -163,6 +169,12 @@ export function confirm(event: Anchor, message: string, action = "删除") {
 export function promptAt(event: Anchor, message: string, value: string, action = "确定") {
   const { clientX: x, clientY: y } = point(event);
   return new Promise<string | null>((resolve) => showConfirm({ x, y, message, action, input: value, resolve }));
+}
+
+/* Several destructive options at the pointer; resolves to the chosen value, or null. */
+export function choose(event: Anchor, message: string, choices: Choice[]) {
+  const { clientX: x, clientY: y } = point(event);
+  return new Promise<string | null>((resolve) => showConfirm({ x, y, message, action: "", choices, resolve }));
 }
 
 /* Pointer position, or the element's corner for keyboard clicks (no coordinates).
@@ -204,6 +216,37 @@ export function Dialogs() {
   useEscape(() => close(null), !!request);
   useEscape(() => settle(false), !!pending);
 
+  if (pending?.choices) {
+    const width = 300;
+    const left = pending.x + width + 12 > innerWidth ? pending.x - width - 6 : pending.x + 6;
+    const top = Math.min(pending.y + 6, innerHeight - 60 - pending.choices.length * 56);
+    return (
+      <div className="fixed inset-0 z-50" onMouseDown={(e) => e.target === e.currentTarget && settle(false)}>
+        <div className="card absolute p-2 shadow-xl" style={{ left: Math.max(8, left), top, width }}>
+          <p className="px-1.5 pt-1 pb-1.5 text-xs text-muted">{pending.message}</p>
+          {pending.choices.map((c, i) => (
+            <button
+              key={c.value}
+              autoFocus={i === 0}
+              className="block w-full cursor-pointer rounded-md px-2 py-1.5 text-left hover:bg-danger/10 focus-visible:bg-danger/10 focus-visible:outline-none"
+              onClick={() => {
+                pending.resolve(c.value);
+                setPending(null);
+              }}
+            >
+              <span className="block text-[13px] font-medium text-danger">{c.label}</span>
+              {c.hint && <span className="mt-0.5 block text-xs text-muted">{c.hint}</span>}
+            </button>
+          ))}
+          <div className="mt-1 flex justify-end border-t border-line pt-2">
+            <button type="button" className="btn btn-sm" onClick={() => settle(false)}>
+              取消
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   if (pending) {
     const prompt = pending.input !== undefined;
     const width = prompt ? 280 : 240;
@@ -361,12 +404,12 @@ export function CopyButton({ text, label = "复制", className }: { text: string
   );
 }
 
-/* Centered dialog. */
-export function Modal({ title, onClose, children, actions }: { title: ReactNode; onClose: () => void; children: ReactNode; actions?: ReactNode }) {
+/* Centered dialog. `wide`: a large editing surface with a fixed height. */
+export function Modal({ title, onClose, children, actions, footer, wide }: { title: ReactNode; onClose: () => void; children: ReactNode; actions?: ReactNode; footer?: ReactNode; wide?: boolean }) {
   useEscape(onClose);
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/25 p-4 dark:bg-black/50" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="card flex max-h-full w-full max-w-md flex-col shadow-2xl">
+      <div className={cx("card flex max-h-full w-full flex-col shadow-2xl", wide ? "h-[88vh] max-w-6xl" : "max-w-md")}>
         <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-line pr-2 pl-5">
           <h2 className="min-w-0 truncate text-[15px] font-semibold">{title}</h2>
           <div className="flex items-center gap-0.5">
@@ -376,8 +419,131 @@ export function Modal({ title, onClose, children, actions }: { title: ReactNode;
             </button>
           </div>
         </div>
-        <div className="min-h-0 overflow-y-auto p-5">{children}</div>
+        <div className={cx("min-h-0 flex-1", wide ? "flex flex-col" : "overflow-y-auto p-5")}>{children}</div>
+        {footer && <div className="flex shrink-0 items-center gap-2 border-t border-line px-5 py-3">{footer}</div>}
       </div>
+    </div>
+  );
+}
+
+export interface Option {
+  value: string;
+  label: string;
+  group?: string;
+  /* Small chip after the label, e.g. what produced a generated audio. */
+  tag?: string;
+}
+
+/* Select with type-to-filter: typing filters (space-separated terms, all must match),
+   ↑/↓ move, Enter picks, Escape or blur closes. The list is fixed-positioned so it
+   isn't clipped by scrolling sheets. */
+export function Combobox({ value, options, onChange, placeholder = "选择…", label, disabled, className }: { value: string | null; options: Option[]; onChange: (value: string) => void; placeholder?: string; label?: string; disabled?: boolean; className?: string }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [active, setActive] = useState(0);
+  const [box, setBox] = useState<DOMRect | null>(null);
+  const input = useRef<HTMLInputElement>(null);
+  const list = useRef<HTMLDivElement>(null);
+  const selected = options.find((o) => o.value === (value ?? ""));
+  const shown = useMemo(() => {
+    const terms = query.trim().toLowerCase().split(/\s+/).filter(Boolean);
+    return options.filter((o) => terms.every((t) => `${o.label} ${o.group ?? ""}`.toLowerCase().includes(t)));
+  }, [options, query]);
+
+  const close = () => {
+    setOpen(false);
+    setQuery("");
+  };
+  useEscape(close, open);
+  function show() {
+    if (disabled || open) return;
+    setBox(input.current!.getBoundingClientRect());
+    setActive(Math.max(0, options.findIndex((o) => o.value === (value ?? ""))));
+    setOpen(true);
+  }
+  function pick(option?: Option) {
+    if (!option) return;
+    onChange(option.value);
+    close();
+  }
+  // Follow the input while ancestors scroll or the window resizes.
+  useEffect(() => {
+    if (!open) return;
+    const place = () => input.current && setBox(input.current.getBoundingClientRect());
+    addEventListener("scroll", place, true);
+    addEventListener("resize", place);
+    return () => {
+      removeEventListener("scroll", place, true);
+      removeEventListener("resize", place);
+    };
+  }, [open]);
+  useEffect(() => {
+    if (open) list.current?.querySelector(`[data-index="${active}"]`)?.scrollIntoView({ block: "nearest" });
+  }, [open, active]);
+
+  const below = box ? innerHeight - box.bottom : 0;
+  const up = !!box && below < 240 && box.top > below;
+  return (
+    <div className={cx("relative min-w-0", className)}>
+      <input
+        ref={input}
+        role="combobox"
+        aria-label={label}
+        aria-expanded={open}
+        disabled={disabled}
+        className={cx("input truncate pr-7", !open && !selected && "text-muted")}
+        value={open ? query : (selected?.label ?? "")}
+        placeholder={open ? selected?.label || "输入以筛选…" : placeholder}
+        onClick={show}
+        onBlur={close}
+        onChange={(e) => {
+          show();
+          setQuery(e.target.value);
+          setActive(0);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+            e.preventDefault();
+            if (!open) return show();
+            const step = e.key === "ArrowDown" ? 1 : -1;
+            setActive((i) => Math.min(Math.max(i + step, 0), shown.length - 1));
+          } else if (e.key === "Enter" && open) {
+            e.preventDefault();
+            pick(shown[active]);
+          } else if (e.key === "Tab") close();
+        }}
+      />
+      <ChevronDown size={14} className="pointer-events-none absolute top-2.5 right-2 text-muted" />
+      {open && box && (
+        <div
+          ref={list}
+          role="listbox"
+          onMouseDown={(e) => e.preventDefault()}
+          className="card fixed z-50 max-h-64 overflow-y-auto py-1 shadow-xl"
+          style={{ left: box.left, width: Math.max(box.width, 240), ...(up ? { bottom: innerHeight - box.top + 4 } : { top: box.bottom + 4 }) }}
+        >
+          {shown.map((o, i) => (
+            <div key={o.value}>
+              {o.group && o.group !== shown[i - 1]?.group && <div className="px-2.5 pt-2 pb-1 text-[11px] font-medium text-muted">{o.group}</div>}
+              <div
+                role="option"
+                aria-selected={o.value === (value ?? "")}
+                data-index={i}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => pick(o)}
+                className={cx("flex cursor-pointer items-center gap-2 px-2.5 py-1.5 text-[13px]", i === active && "bg-hover", o.value === (value ?? "") && "font-medium text-accent")}
+              >
+                <span className="min-w-0 flex-1 truncate" title={o.label}>
+                  {o.label}
+                </span>
+                {o.tag && <span className="chip shrink-0">{o.tag}</span>}
+                {o.value === (value ?? "") && <Check size={13} className="shrink-0" />}
+              </div>
+            </div>
+          ))}
+          {!shown.length && <p className="px-2.5 py-2 text-xs text-muted">无匹配</p>}
+        </div>
+      )}
     </div>
   );
 }

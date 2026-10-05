@@ -125,6 +125,15 @@
   }
 }
 
+/* Add to .tip for a long explanation: wraps at 15rem, opens below (so headers above a
+   scrolling panel can't cover it), aligned to the element's right edge.
+   (after: variants would reset `content`, so the overrides live here.) */
+@utility tip-wide {
+  &::after {
+    @apply top-[calc(100%+6px)] right-0 bottom-auto left-auto w-60 translate-x-0 py-1.5 leading-relaxed whitespace-normal;
+  }
+}
+
 /* Task dock: wave while a task runs, focus ring when one is submitted. */
 .task-wave {
   position: absolute;

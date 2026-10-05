@@ -1,63 +1,66 @@
 import { useRef, useState } from "react";
 import { ChevronDown, Plus, Sliders, Trash2, Upload } from "react-feather";
-import { api, isAudio, upload, type Audio, type Binding, type Generation, type Role } from "./api";
+import { api, audioKind, GENERATED, isAudio, upload, type Audio, type Binding, type Generation, type Role } from "./api";
 import { PlayButton, Player } from "./player";
 import { useAction, useLoad } from "./state";
-import { cx, Field, Segmented } from "./ui";
+import { Combobox, cx, Field, Segmented, type Option } from "./ui";
 
 type Source = { name: string; path: string };
 const SAMPLE = "sample:";
 
-/* Reference audio: pick an imported file, import from samples/, or upload. */
-export function AudioPicker({ value, onChange, exclude = [], all = false }: { value: string | null; onChange: (id: string, record?: Audio) => void; exclude?: string[]; all?: boolean }) {
+/* Audio as combobox options: uploads, with `all` generated speech and merges (tagged by
+   origin), then all of samples/ (referenced in place; resolve() registers one on first pick).
+   Takes are left out: per-sentence clips, too many to list. */
+export function useAudioOptions(all = false) {
   const audio = useLoad<Audio[]>(all ? "/audio" : "/audio?reference=true", []);
   const samples = useLoad<Source[]>("/audio/sources", []);
+  const run = useAction();
+  const registered = new Map(audio.data.filter((a) => a.source === "samples").map((a) => [a.path, a]));
+  const sampled = new Set(samples.data.map((s) => s.path));
+  const options: Option[] = [
+    // Older imports copied samples files into uploads under the same name; samples lists them already.
+    ...audio.data.filter((a) => audioKind(a) === "upload" && !sampled.has(a.name)).map((a) => ({ value: a.id, label: a.name, group: "上传" })),
+    ...(all ? audio.data : [])
+      .filter((a) => isAudio(a) && (audioKind(a) === "speech" || audioKind(a) === "merge"))
+      .map((a) => ({ value: a.id, label: a.name, group: "生成的音频", tag: GENERATED[audioKind(a)] })),
+    ...samples.data.map((s) => ({ value: registered.get(s.path)?.id ?? SAMPLE + s.path, label: s.name, group: "samples" })),
+  ];
+  const names = new Map(audio.data.map((a) => [a.id, a.name]));
+  async function resolve(value: string) {
+    if (!value.startsWith(SAMPLE)) return audio.data.find((a) => a.id === value);
+    const created = await run(() => api.post<Audio>("/audio/import", { path: value.slice(SAMPLE.length) }));
+    if (created) audio.setData((items) => [created, ...items]);
+    return created;
+  }
+  const add = (record: Audio) => audio.setData((items) => [record, ...items]);
+  return { options, names, resolve, add };
+}
+
+/* Reference audio: pick from uploads or samples/ (type to filter), or upload. */
+export function AudioPicker({ value, onChange, all = false }: { value: string | null; onChange: (id: string, record?: Audio) => void; all?: boolean }) {
+  const audio = useAudioOptions(all);
   const run = useAction();
   const file = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
 
-  async function add(fn: () => Promise<Audio>) {
+  async function pick(load: () => Promise<Audio | undefined>) {
     setBusy(true);
-    const created = await run(fn);
+    const record = await load();
     setBusy(false);
-    if (!created) return;
-    audio.setData((items) => [created, ...items]);
-    onChange(created.id, created);
+    if (record) onChange(record.id, record);
   }
   return (
     <div className="space-y-2">
       <div className="flex gap-1.5">
-        <select
-          className="input"
-          aria-label="参考音频"
-          value={value || ""}
+        <Combobox
+          className="flex-1"
+          label="参考音频"
+          value={value}
+          options={audio.options}
           disabled={busy}
-          onChange={(e) => {
-            const v = e.target.value;
-            if (v.startsWith(SAMPLE)) void add(() => api.post<Audio>("/audio/import", { path: v.slice(SAMPLE.length) }));
-            else if (v) onChange(v, audio.data.find((a) => a.id === v));
-          }}
-        >
-          <option value="">{busy ? "导入中…" : "选择参考音频…"}</option>
-          <optgroup label="已导入">
-            {audio.data
-              .filter((a) => isAudio(a) && !exclude.includes(a.id))
-              .map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name}
-                </option>
-              ))}
-          </optgroup>
-          {samples.data.length > 0 && (
-            <optgroup label="samples（选择即导入）">
-              {samples.data.map((s) => (
-                <option key={s.path} value={SAMPLE + s.path}>
-                  {s.name}
-                </option>
-              ))}
-            </optgroup>
-          )}
-        </select>
+          placeholder={busy ? "导入中…" : "选择参考音频，可输入筛选…"}
+          onChange={(v) => void pick(() => audio.resolve(v))}
+        />
         <button className="btn btn-icon" title="上传音频" aria-label="上传音频" disabled={busy} onClick={() => file.current?.click()}>
           <Upload size={14} />
         </button>
@@ -69,7 +72,12 @@ export function AudioPicker({ value, onChange, exclude = [], all = false }: { va
           onChange={(e) => {
             const f = e.target.files?.[0];
             e.target.value = "";
-            if (f) void add(() => upload(f));
+            if (f)
+              void pick(async () => {
+                const record = await run(() => upload(f));
+                if (record) audio.add(record);
+                return record;
+              });
           }}
         />
       </div>
@@ -127,10 +135,23 @@ export function GenerationParams({ value, onChange, open: initial = false }: { v
   );
 }
 
-/* Speaker name → role + reference audio. */
-export function Bindings({ value, onChange, roles, audio }: { value: Binding[]; onChange: (v: Binding[]) => void; roles: Role[]; audio: Audio[] }) {
+/* Speaker name → role + reference audio. A regular role offers its samples/<name>/ files;
+   an anonymous role (or no role) offers any audio, its own folder first. */
+export function Bindings({ value, onChange, roles }: { value: Binding[]; onChange: (v: Binding[]) => void; roles: Role[] }) {
+  const audio = useAudioOptions();
   const update = (index: number, patch: Partial<Binding>) => onChange(value.map((b, i) => (i === index ? { ...b, ...patch } : b)));
-  const names = new Map(audio.map((a) => [a.id, a.name]));
+  const roleOptions: Option[] = [
+    { value: "", label: "无角色（任意音频）" },
+    ...[...roles]
+      .sort((a, b) => Number(a.anonymous) - Number(b.anonymous) || a.name.localeCompare(b.name, "zh"))
+      .map((r) => ({ value: r.id, label: r.name, group: r.anonymous ? "匿名角色（任意音频）" : "角色（samples 文件夹）" })),
+  ];
+  function audioOptions(role?: Role): Option[] {
+    const own = (role?.audio_ids ?? []).map((id) => ({ value: id, label: audio.names.get(id) || id.slice(0, 8), group: `samples/${role!.name}` }));
+    if (role && !role.anonymous) return own;
+    const mine = new Set(own.map((o) => o.value));
+    return [...own, ...audio.options.filter((o) => !mine.has(o.value))];
+  }
   return (
     <div className="space-y-1.5">
       {value.length > 0 && (
@@ -142,33 +163,28 @@ export function Bindings({ value, onChange, roles, audio }: { value: Binding[]; 
       )}
       {value.map((b, i) => {
         const role = roles.find((r) => r.id === b.role_id);
-        const choices = role ? role.audio_ids : audio.map((a) => a.id);
         return (
           <div key={i} className="grid grid-cols-[1fr_1fr_1.4fr_24px_32px] items-center gap-1.5">
             <input className={cx("input", !b.speaker.trim() && "border-warn/60")} placeholder="如：旁白" value={b.speaker} onChange={(e) => update(i, { speaker: e.target.value })} />
-            <select
-              className="input"
-              value={b.role_id || ""}
-              onChange={(e) => {
-                const r = roles.find((r) => r.id === e.target.value);
-                update(i, { role_id: r?.id || null, audio_id: r?.audio_ids[0] || null });
+            <Combobox
+              label="角色"
+              value={b.role_id ?? ""}
+              options={roleOptions}
+              onChange={(v) => {
+                const r = roles.find((r) => r.id === v);
+                // A regular role can only use its folder; anonymous keeps the current audio.
+                const keep = !r || r.anonymous || (b.audio_id && r.audio_ids.includes(b.audio_id));
+                update(i, { role_id: r?.id ?? null, audio_id: keep ? b.audio_id : (r.audio_ids[0] ?? null) });
               }}
-            >
-              <option value="">不使用角色</option>
-              {roles.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name}
-                </option>
-              ))}
-            </select>
-            <select className={cx("input", !b.audio_id && "border-warn/60")} value={b.audio_id || ""} onChange={(e) => update(i, { audio_id: e.target.value || null })}>
-              <option value="">未绑定</option>
-              {choices.map((id) => (
-                <option key={id} value={id}>
-                  {names.get(id) || id.slice(0, 8)}
-                </option>
-              ))}
-            </select>
+            />
+            <Combobox
+              className={cx(!b.audio_id && "[&_input]:border-warn/60")}
+              label="参考音频"
+              value={b.audio_id}
+              placeholder={role && !role.anonymous && !role.audio_ids.length ? `samples/${role.name}/ 为空` : "未绑定"}
+              options={audioOptions(role)}
+              onChange={(v) => void audio.resolve(v).then((record) => record && update(i, { audio_id: record.id }))}
+            />
             <PlayButton id={b.audio_id} />
             <button className="btn btn-ghost btn-icon btn-danger" aria-label="移除" onClick={() => onChange(value.filter((_, n) => n !== i))}>
               <Trash2 size={14} />
