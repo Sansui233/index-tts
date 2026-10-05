@@ -1,3 +1,52 @@
-[build-system]
-requires = ["setuptools>=61.0"]
-build-backend = "setuptools.build_meta"
+[project]
+name = "index-tts-webui3"
+version = "0.1.0"
+requires-python = "==3.12.*"
+dependencies = [
+    # Web API
+    "fastapi==0.116.1",
+    "uvicorn==0.35.0",
+    "python-multipart==0.0.20",
+    "pydantic==2.11.7",
+    "starlette==0.47.2",
+    # IndexTTS 1.5 inference (linked ./indextts)
+    "torch==2.8.0",
+    "torchaudio==2.8.0",
+    "transformers==4.36.2",
+    "tokenizers>=0.15.1,<0.19",  # 0.15.0 has no cp312 wheel
+    "einops==0.8.1",
+    "omegaconf>=2.3",
+    "sentencepiece>=0.2",
+    "numpy<2",
+    "matplotlib>=3.8",
+    "scipy>=1.11",
+    "pyyaml>=6",
+    "packaging",
+    "tqdm",
+    "soundfile>=0.12",
+    # Text normalization; replaces WeTextProcessing, which needs pynini
+    "wetext>=0.1.8",
+    # Subtitles and audio merging
+    "opencc>=1.1.9",
+    "pydub>=0.25",
+]
+
+[project.optional-dependencies]
+# Hard to build on Windows; inference falls back to plain PyTorch without it.
+deepspeed = ["deepspeed>=0.16"]
+
+[dependency-groups]
+dev = ["httpx==0.28.1"]
+
+[tool.uv]
+package = false
+link-mode = "hardlink"
+
+[tool.uv.sources]
+torch = [{ index = "pytorch-cu128" }]
+torchaudio = [{ index = "pytorch-cu128" }]
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true

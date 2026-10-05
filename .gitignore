@@ -1,22 +1,30 @@
-.venv
-venv/
-__pycache__
-*.egg-info
-*.DS_Store
+# Python / uv
+.venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+.ruff_cache/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+
+# Model weights (keep configs)
+checkpoints/*
+!checkpoints/config.yaml
+!checkpoints/config2.yaml
+
+# User data: reference audio, legacy outputs, webui data (roles, sessions, takes)
+samples
+outputs/
+data/
+
+# Pruned legacy files awaiting manual deletion
+_legacy/
+
+# Editors / OS
 .idea/
 .vscode/
 .zed/
-checkpoints/*.pth
-checkpoints/*.vocab
-checkpoints/*.model
-checkpoints/.cache
-outputs/
-build/
-*.py[cod]
-*.egg-info/
-
-checkpoints/whisper*
-samples/*
-!samples/example1.wav
-temp_dialog/
-webui2/presets/multi_dialog/*
+*.DS_Store
