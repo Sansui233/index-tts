@@ -1,6 +1,11 @@
 # IndexTTS WebUI
 
-基于 [IndexTTS 1.5](https://github.com/index-tts/index-tts)（[论文](https://arxiv.org/abs/2502.05512)）的本地 WebUI：单句语音生成、字幕生成，以及多角色对话 / 有声书的逐句生成、试听与合并。
+基于 [IndexTTS 1.5](https://github.com/index-tts/index-tts) 的本地 WebUI。主要功能包括
+- 单句语音生成
+- 字幕生成
+- 多角色对话 / 有声书的逐句生成、试听与合并
+
+使用轻量但功能全面的架构。快速启动，任务队列，适合个人电脑使用。
 
 ![IndexTTS WebUI](assets/webui3.png)
 
@@ -10,10 +15,10 @@
 
 需要：
 
-- NVIDIA 显卡与支持 CUDA 12.8 的驱动
-- [uv](https://docs.astral.sh/uv/)（会自动安装 Python 3.12 与 PyTorch 2.8.0 + cu128）
+- NVIDIA 显卡与支持 CUDA 12.8 的驱动（可以自己改 pyproject.toml 中的依赖版本）
+- [uv](https://docs.astral.sh/uv/)（ Python 3.12 与 PyTorch 2.8.0 + cu128）
 - [Node.js](https://nodejs.org/) 与 [pnpm](https://pnpm.io/)（构建前端）
-- `ffmpeg`，需在 PATH 中（字幕与合并使用）
+- `ffmpeg` 需在 PATH 中（字幕、合并音频使用）
 
 在仓库根目录执行：
 
@@ -23,19 +28,21 @@ pnpm --dir frontend install --frozen-lockfile
 pnpm --dir frontend build
 ```
 
-下载 IndexTTS 1.5 模型到 `checkpoints/`（国内可先设置 `$env:HF_ENDPOINT="https://hf-mirror.com"`）：
+下载 IndexTTS 1.5 模型到 `checkpoints/`：
 
 ```powershell
 uv run huggingface-cli download IndexTeam/IndexTTS-1.5 config.yaml bigvgan_generator.pth bpe.model dvae.pth gpt.pth unigram_12000.vocab --local-dir checkpoints
 ```
 
-字幕生成还需要本地 Whisper 模型，可选 `tiny` / `base` / `small` / `medium`，放在 `checkpoints/whisper/whisper-<size>`：
+（国内可先设置 `$env:HF_ENDPOINT="https://hf-mirror.com"`）
+
+（可选）字幕生成还需要本地 Whisper 模型，可选 `tiny` / `base` / `small` / `medium`，放在 `checkpoints/whisper/whisper-<size>`：
 
 ```powershell
 uv run huggingface-cli download openai/whisper-base --local-dir checkpoints/whisper/whisper-base
 ```
 
-DeepSpeed 可选（`uv sync --extra deepspeed`），未安装时使用标准 PyTorch 推理。
+（可选）DeepSpeed 可选（`uv sync --extra deepspeed`），未安装时使用标准 PyTorch 推理。
 
 ## 启动
 
@@ -47,7 +54,7 @@ uv run main.py          # 或双击 run.bat；可加 --host / --port
 
 ## 准备参考音频
 
-参考音频放在仓库根目录的 `samples/`（也可以是指向其他目录的链接），在文件系统中自行整理；WebUI 只读取，从不修改其中的文件。支持 wav、mp3、flac、ogg、m4a、aac。
+参考音频放在仓库根目录的 `samples/`（也可以是指向其他目录的链接），在文件系统中自行整理；WebUI 会读取其中的音频作为参考音频。支持 wav、mp3、flac、ogg、m4a、aac。
 
 ```text
 samples/
