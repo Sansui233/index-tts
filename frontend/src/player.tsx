@@ -18,10 +18,11 @@ audio.addEventListener("play", () => emit({ playing: true }));
 audio.addEventListener("pause", () => emit({ playing: false }));
 audio.addEventListener("ended", () => emit({ playing: false, time: 0 }));
 
-function toggle(id: string) {
-  if (state.id !== id) {
-    audio.src = fileUrl(id);
-    emit({ id, time: 0, duration: 0 });
+/* Playback is keyed by URL: audio records (fileUrl) and takes (takeUrl) alike. */
+function toggle(url: string) {
+  if (state.id !== url) {
+    audio.src = url;
+    emit({ id: url, time: 0, duration: 0 });
   }
   void (audio.paused ? audio.play() : audio.pause());
 }
@@ -29,15 +30,17 @@ function toggle(id: string) {
 const subscribe = (l: () => void) => (listeners.add(l), () => void listeners.delete(l));
 const clock = (s: number) => (isFinite(s) ? `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, "0")}` : "0:00");
 
-/* Audio preview + file actions. `rename` adds the rename button beside download. */
-export function Player({ id, download = true, rename = false, className }: { id?: string | null; download?: boolean; rename?: boolean; className?: string }) {
+/* Audio preview + file actions, for an audio record (`id`) or any audio URL (`src`, e.g. a
+   take). `rename` adds the rename button beside download; it needs an audio record. */
+export function Player({ id, src, download = true, rename = false, className }: { id?: string | null; src?: string | null; download?: boolean; rename?: boolean; className?: string }) {
   const s = useSyncExternalStore(subscribe, () => state);
-  if (!id) return <span className={cx("text-xs text-muted", className)}>未生成</span>;
-  const active = s.id === id;
+  const url = src ?? (id ? fileUrl(id) : null);
+  if (!url) return <span className={cx("text-xs text-muted", className)}>未生成</span>;
+  const active = s.id === url;
   const ratio = active && s.duration ? s.time / s.duration : 0;
   return (
     <div className={cx("flex h-8 min-w-0 items-center gap-2 rounded-full bg-hover pr-2 pl-1", className)}>
-      <PlayButton id={id} />
+      <PlayButton src={url} />
       <div
         className="relative h-1 min-w-10 flex-1 cursor-pointer rounded-full bg-line"
         onClick={(e) => {
@@ -49,7 +52,7 @@ export function Player({ id, download = true, rename = false, className }: { id?
         <div className="absolute inset-y-0 left-0 rounded-full bg-accent" style={{ width: `${ratio * 100}%` }} />
       </div>
       <span className="shrink-0 text-[11px] text-muted tabular-nums">{active ? `${clock(s.time)} / ${clock(s.duration)}` : "—:——"}</span>
-      <FileActions id={id} download={download} rename={rename} />
+      <FileActions id={id} href={download ? (id ? fileUrl(id, true) : `${url}?download=true`) : null} rename={rename && !!id} />
     </div>
   );
 }
@@ -71,7 +74,7 @@ export function SrtPreview({ id, className }: { id: string; className?: string }
       <span className={cx("min-w-0 flex-1 truncate text-xs", !excerpt && "text-muted")} title={excerpt}>
         {excerpt || "（空字幕）"}
       </span>
-      <FileActions id={id} rename />
+      <FileActions id={id} href={fileUrl(id, true)} rename />
     </div>
   );
 }
@@ -87,7 +90,7 @@ function firstCue(srt: string) {
 
 /* Rename (popover at the pointer, extension kept) and download. Renaming changes only the
    download name in the audio record; the file on disk and all references keep the id. */
-function FileActions({ id, download = true, rename = false }: { id: string; download?: boolean; rename?: boolean }) {
+function FileActions({ id, href, rename = false }: { id?: string | null; href: string | null; rename?: boolean }) {
   const run = useAction();
   async function renameFile(e: MouseEvent) {
     const at = point(e);
@@ -109,8 +112,8 @@ function FileActions({ id, download = true, rename = false }: { id: string; down
           <Edit2 size={13} />
         </button>
       )}
-      {download && (
-        <a href={fileUrl(id, true)} className="shrink-0 text-muted hover:text-accent" aria-label="下载" title="下载">
+      {href && (
+        <a href={href} className="shrink-0 text-muted hover:text-accent" aria-label="下载" title="下载">
           <Download size={13} />
         </a>
       )}
@@ -119,13 +122,14 @@ function FileActions({ id, download = true, rename = false }: { id: string; down
 }
 
 /* Play/pause only, for previews in dense rows. */
-export function PlayButton({ id, className }: { id?: string | null; className?: string }) {
+export function PlayButton({ id, src, className }: { id?: string | null; src?: string | null; className?: string }) {
   const s = useSyncExternalStore(subscribe, () => state);
-  const playing = !!id && s.id === id && s.playing;
+  const url = src ?? (id ? fileUrl(id) : null);
+  const playing = !!url && s.id === url && s.playing;
   return (
     <button
-      disabled={!id}
-      onClick={() => id && toggle(id)}
+      disabled={!url}
+      onClick={() => url && toggle(url)}
       aria-label={playing ? "暂停" : "试听"}
       title={playing ? "暂停" : "试听"}
       className={cx(

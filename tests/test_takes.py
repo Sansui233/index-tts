@@ -82,6 +82,10 @@ class TakeTests(unittest.TestCase):
         self.assertLess(response.status_code, 300, response.text)
         return response.json()
 
+    def take_path(self, line, take):
+        session = self.request("GET", self.base)
+        return self.app.state.services.sessions.take_path(session, line["id"], take)
+
     def finish(self, task):
         for _ in range(200):
             value = self.request("GET", "/tasks/" + task["id"])
@@ -158,10 +162,8 @@ class TakeTests(unittest.TestCase):
 
     def test_cleanup_file_failure_retains_index_for_retry(self):
         first = self.generate()
-        old_id = first["takes"][0]["audio_id"]
+        target = self.take_path(first, first["takes"][0])
         self.generate()
-        record = self.app.state.store.get("audio", old_id)
-        target = self.app.state.store.path(record["path"])
         original = Path.unlink
 
         def fail_one(path, *args, **kwargs):
@@ -177,19 +179,29 @@ class TakeTests(unittest.TestCase):
             self.request("POST", self.linebase + "/takes/cleanup")["deleted"], 1
         )
 
-    def test_move_session_then_delete_project(self):
+    def test_change_project_moves_nothing_then_delete_project(self):
         line = self.generate()
         store = self.app.state.store
-        audio_id = line["takes"][0]["audio_id"]
+        audio = self.take_path(line, line["takes"][0])
+        self.assertTrue(audio.is_relative_to(store.path(f"sessions/{self.session['id']}")))
         other = self.request("POST", "/projects", {"name": "other"})
         body = {k: self.session[k] for k in ("name", "bindings", "generation", "interval")}
         self.request("PUT", self.base, {**body, "project_id": other["id"]})
-        moved = store.path(store.get("audio", audio_id)["path"])
-        self.assertTrue(moved.is_relative_to(store.path(f"projects/{other['id']}")))
-        self.assertTrue(moved.exists())
+        self.assertTrue(audio.exists())
         self.request("DELETE", "/projects/" + other["id"])
-        self.assertFalse(moved.exists())
+        self.assertFalse(audio.parents[2].exists())
         self.assertEqual(self.client.get("/api" + self.base).status_code, 404)
+
+    def test_session_without_project(self):
+        loose = self.request("POST", "/sessions", {"name": "loose", "bindings": []})
+        self.assertIsNone(loose["project_id"])
+        names = [s["name"] for s in self.request("GET", "/sessions")]
+        self.assertIn("loose", names)
+        body = {k: self.session[k] for k in ("name", "bindings", "generation", "interval")}
+        self.assertIsNone(self.request("PUT", self.base, {**body, "project_id": None})["project_id"])
+        self.request("DELETE", "/projects/" + self.project["id"])
+        # Deleting the old project leaves sessions that left it.
+        self.assertEqual(self.request("GET", self.base)["name"], "chapter")
 
     def test_script_keeps_modifies_adds_and_removes(self):
         line = self.generate()
@@ -217,7 +229,7 @@ class TakeTests(unittest.TestCase):
         self.generate()
         line = self.generate()
         store = self.app.state.store
-        files = [store.path(store.get("audio", t["audio_id"])["path"]) for t in line["takes"]]
+        files = [self.take_path(line, t) for t in line["takes"]]
         other = self.request("GET", self.base)["lines"][1]
         self.generate(self.base + "/lines/" + other["id"])
         self.generate(self.base + "/lines/" + other["id"])
@@ -227,8 +239,6 @@ class TakeTests(unittest.TestCase):
         result = self.request("POST", self.base + "/takes/cleanup?mode=orphans")
         self.assertEqual((result["deleted"], result["failures"]), (2, []))
         self.assertFalse(files[0].parent.exists())
-        records = {r["path"] for r in store.list("audio")}
-        self.assertFalse({store.relative(f) for f in files} & records)
         # The remaining line's unused take is untouched until the "all" mode.
         self.assertEqual(len(self.request("GET", self.base)["lines"][0]["takes"]), 2)
         result = self.request("POST", self.base + "/takes/cleanup?mode=all")
@@ -258,19 +268,25 @@ class TakeTests(unittest.TestCase):
         self.assertEqual(names, ["001 #0 A Hello.wav"])
         self.assertEqual(self.request("POST", self.base + "/lines/takes/cleanup", body)["deleted"], 1)
         store = self.app.state.store
-        current = store.path(store.get("audio", self.request("GET", self.base)["lines"][0]["takes"][0]["audio_id"])["path"])
+        first = self.request("GET", self.base)["lines"][0]
+        current = self.take_path(first, first["takes"][0])
         lines = self.request("POST", self.base + "/lines/delete", body)["lines"]
         self.assertEqual(lines, [])
         self.assertFalse(current.exists())
 
-    def test_reference_protects_unused_take(self):
-        first = self.generate()
-        old_audio = first["takes"][0]["audio_id"]
-        self.generate()
-        self.request("POST", "/presets", {"name": "reference", "bindings": [{"speaker": "x", "audio_id": old_audio}]})
-        result = self.request("POST", self.linebase + "/takes/cleanup")
-        self.assertEqual(result["deleted"], 0)
-        self.assertEqual(len(result["failures"]), 1)
+    def test_takes_have_no_audio_record_and_play_from_derived_path(self):
+        line = self.generate()
+        take = line["takes"][0]
+        self.assertNotIn("audio_id", take)
+        self.assertFalse(any("/takes/" in r["path"] for r in self.app.state.store.list("audio")))
+        url = f"/api{self.linebase}/takes/{take['id']}/file"
+        self.assertEqual(self.client.get(url).content, self.take_path(line, take).read_bytes())
+        self.assertIn("Take%201", self.client.get(url + "?download=true").headers["content-disposition"])
+        # No index.json mirror beside the audio.
+        session = self.request("GET", self.base)
+        folder = self.take_path(line, take).parents[2]
+        self.assertFalse((folder / "index.json").exists())
+        self.assertEqual(session["id"], folder.name)
 
 
 if __name__ == "__main__":

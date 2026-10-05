@@ -46,7 +46,7 @@ class Preset(Named):
 
 
 class SessionInput(Preset):
-    project_id: str
+    project_id: str | None = None  # None: not in any project
     interval: float = Field(default=0.5, ge=0, le=30)
 
 

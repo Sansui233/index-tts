@@ -83,9 +83,10 @@ class Generation:
             paths = []
             for line in session["lines"]:
                 take = current_take(line)
-                if not take or not take.get("audio_id"):
+                path = take and self.sessions.take_path(session, line["id"], take)
+                if not path or not path.is_file():
                     raise ValueError(f"句子 #{line['index']} 没有当前音频")
-                paths.append(self.audio.path(take["audio_id"]))
+                paths.append(path)
         if not paths:
             raise ValueError("没有句子")
         gap = AudioSegment.silent(duration=session["interval"] * 1000)
@@ -93,7 +94,7 @@ class Generation:
         for index, path in enumerate(paths):
             progress(index / len(paths), f"合并 {index + 1}/{len(paths)}")
             combined += (gap if index else AudioSegment.empty()) + AudioSegment.from_file(path)
-        output = self.audio.new_path(".wav", f"{folder(session['project_id'], key)}/merged")
+        output = self.audio.new_path(".wav", f"{folder(key)}/merged")
         combined.export(output, format="wav")
         record = self.audio.register(output, title(session["name"], 80))
         self.sessions.add_output(key, record["id"])

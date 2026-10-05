@@ -282,7 +282,8 @@ export function Dialogs() {
     );
   }
   if (!request) return null;
-  const ready = request.fields.every((f) => values[f.key]?.trim());
+  // Text fields are required; a choice may be empty ("none").
+  const ready = request.fields.every((f) => f.options || values[f.key]?.trim());
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/25 p-4 dark:bg-black/50" onMouseDown={(e) => e.target === e.currentTarget && close(null)}>
       <form

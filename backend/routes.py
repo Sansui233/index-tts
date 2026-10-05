@@ -274,6 +274,19 @@ def build_router(app: SimpleNamespace):
         line = find_line(store.get("sessions", key), line_id)
         return {k: line[k] for k in ("index", "current_take_id", "takes")}
 
+    @api.get("/sessions/{key}/lines/{line_id}/takes/{take_id}/file")
+    def take_audio(key: str, line_id: str, take_id: str, download: bool = False):
+        session = store.get("sessions", key)
+        line = find_line(session, line_id)
+        take = next((t for t in line["takes"] if t["id"] == take_id), None)
+        if not take:
+            raise KeyError("Take 不存在")
+        path = sessions.take_path(session, line_id, take)
+        if not path.is_file():
+            raise ValueError("Take 音频缺失")
+        name = title(f"#{line['index']} Take {take['take_index']} {line['text']}", 60) + path.suffix
+        return FileResponse(path, filename=name if download else None)
+
     @api.put("/sessions/{key}/lines/{line_id}/current-take")
     def select_take(key: str, line_id: str, request: S.Selection):
         return sessions.select(key, line_id, request.take_id)

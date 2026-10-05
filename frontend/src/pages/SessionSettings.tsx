@@ -34,7 +34,8 @@ export function SessionSettings({ draft, setDraft, session, projects, onSaved }:
             <input className="input" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
           </Field>
           <Field label="所属项目">
-            <select className="input" value={draft.project_id} onChange={(e) => setDraft({ ...draft, project_id: e.target.value })}>
+            <select className="input" value={draft.project_id ?? ""} onChange={(e) => setDraft({ ...draft, project_id: e.target.value || null })}>
+              <option value="">无项目</option>
               {projects.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}

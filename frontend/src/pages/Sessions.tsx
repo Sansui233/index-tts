@@ -2,7 +2,7 @@ import type { MouseEvent } from "react";
 import { Folder, Layers, Plus, Scissors, Trash2 } from "react-feather";
 import { api, defaultGeneration, type Cleanup, type Named, type Preset, type Session } from "../api";
 import { go, useAction, useApp, useLoad, useStored } from "../state";
-import { ago, ask, choose, confirm, Empty, NameInput, Page, PageHeader, Segmented, type Choice, type DialogField } from "../ui";
+import { ago, ask, choose, confirm, cx, Empty, NameInput, Page, PageHeader, Segmented, type Choice, type DialogField } from "../ui";
 
 type Sort = "updated_at" | "created_at" | "name";
 export const CLEANUP_CHOICES: Choice[] = [
@@ -23,32 +23,22 @@ export function Sessions({ project, projects, reloadProjects }: { project?: Name
 
   async function create() {
     const fields: DialogField[] = [{ key: "name", label: "Session 名称", value: "新章节" }];
-    if (!project)
-      fields.push(
-        projects.length
-          ? { key: "project_id", label: "所属项目", options: projects.map((p) => ({ value: p.id, label: p.name })) }
-          : { key: "project", label: "新项目名称", value: "我的有声书" },
-      );
+    if (!project) fields.push({ key: "project_id", label: "所属项目", options: [{ value: "", label: "无项目" }, ...projects.map((p) => ({ value: p.id, label: p.name }))] });
     const presets = (await run(() => api.get<Preset[]>("/presets"))) || [];
     if (presets.length)
       fields.push({ key: "preset_id", label: "多人预设", options: [{ value: "", label: "不使用预设" }, ...presets.map((p) => ({ value: p.id, label: p.name }))] });
     const values = await ask("新建 Session", fields, "创建");
     if (!values) return;
     const preset = presets.find((p) => p.id === values.preset_id);
-    const session = await run(async () => {
-      let projectId = project?.id || values.project_id;
-      if (!projectId) {
-        projectId = (await api.post<Named>("/projects", { name: values.project })).id;
-        reloadProjects();
-      }
-      return api.post<Session>("/sessions", {
+    const session = await run(() =>
+      api.post<Session>("/sessions", {
         name: values.name,
-        project_id: projectId,
+        project_id: project?.id || values.project_id || null,
         bindings: preset?.bindings || [],
         generation: preset?.generation || defaultGeneration,
         interval: 0.5,
-      });
-    });
+      }),
+    );
     if (session) open(session);
   }
   async function remove(e: MouseEvent, s: Session) {
@@ -78,7 +68,7 @@ export function Sessions({ project, projects, reloadProjects }: { project?: Name
 
   return (
     <Page>
-      <PageHeader title={project ? <NameInput className="max-w-[40rem]" label="项目名称" value={project.name} onSave={rename} /> : "最近的 Session"} sub={project ? `${sessions.data.length} 个 Session` : "所有项目中的多人对话与有声书章节"}>
+      <PageHeader title={project ? <NameInput className="max-w-[40rem]" label="项目名称" value={project.name} onSave={rename} /> : "最近的 Session"} sub={project ? `${sessions.data.length} 个 Session` : "所有多人对话与有声书章节，包括不属于任何项目的"}>
         {project && (
           <div className="flex">
             <button className="tip btn btn-ghost btn-icon" data-tip="清理未使用的 Take" aria-label="清理未使用的 Take" onClick={(e) => void cleanup(e)}>
@@ -125,7 +115,7 @@ export function Sessions({ project, projects, reloadProjects }: { project?: Name
                 <span className="truncate font-medium">{s.name}</span>
                 <span className="hidden text-xs text-muted lg:inline">{s.bindings.length} 位说话人</span>
               </span>
-              <span className="hidden truncate text-muted md:block">{projectName.get(s.project_id)}</span>
+              <span className={cx("hidden truncate md:block", s.project_id ? "text-muted" : "text-muted/50")}>{(s.project_id && projectName.get(s.project_id)) || "无项目"}</span>
               <span className="text-right text-muted tabular-nums">{s.line_count}</span>
               <span className="text-right text-xs text-muted">{ago(view.sort === "created_at" ? s.created_at : s.updated_at)}</span>
               <button

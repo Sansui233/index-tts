@@ -1,6 +1,6 @@
 import { useEffect, useState, type MouseEvent } from "react";
 import { AlertCircle, ArrowDown, ArrowUp, Check, ChevronDown, RefreshCw, Scissors, Trash2 } from "react-feather";
-import { api, currentTake, type Cleanup, type Generation, type Line, type Session, type Task } from "../api";
+import { api, currentTake, takeUrl, type Cleanup, type Generation, type Line, type Session, type Task } from "../api";
 import { Player } from "../player";
 import { useAction, useApp } from "../state";
 import { ago, confirm, cx, Spinner } from "../ui";
@@ -132,7 +132,7 @@ export function LineRow({ line, session, busy, first, last, onChange, move, sele
               <Spinner /> 生成中…
             </span>
           ) : (
-            <Player id={take?.audio_id} download={false} className="flex-1" />
+            <Player src={take && takeUrl(session.id, line.id, take)} download={false} className="flex-1" />
           )}
           {line.takes.length > 0 && (
             <button
@@ -166,14 +166,14 @@ export function LineRow({ line, session, busy, first, last, onChange, move, sele
                   {ago(t.created_at)}
                   {t.snapshot.text !== line.text && ` · ${t.snapshot.text}`}
                 </span>
-                <Player id={t.audio_id} />
+                <Player src={takeUrl(session.id, line.id, t)} />
                 {current ? (
                   <span className="chip chip-accent justify-self-end">
                     <Check size={10} />
                     当前
                   </span>
                 ) : (
-                  <button className="btn btn-sm justify-self-end" disabled={!t.audio_id} onClick={() => void select(t.id)}>
+                  <button className="btn btn-sm justify-self-end" onClick={() => void select(t.id)}>
                     设为当前
                   </button>
                 )}

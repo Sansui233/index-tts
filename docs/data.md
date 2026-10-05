@@ -4,15 +4,14 @@ All WebUI state lives in `data/` at the repository root (override with the `WEBU
 
 ```text
 data/
-  projects/<project_id>.json                 project record
-  projects/<project_id>/sessions/<session_id>/
-    index.json                               mirror of sessions/<session_id>.json, beside its audio
+  projects/<project_id>.json                 project record (a name; no folder)
+  sessions/<session_id>.json                 session record
+  sessions/<session_id>/                     that session's audio
     takes/<line_id>/<take_index>_<take_id>.wav   generated takes, one folder per line
     merged/<id>.wav                          merge results
-  sessions/<session_id>.json                 session record (authoritative)
   roles/<role_id>.json                       role record
   presets/<preset_id>.json                   multi-speaker preset record
-  audio/<audio_id>.json                      audio index record (no audio in this folder)
+  audio/<audio_id>.json                      audio record for non-take audio (no audio in this folder)
   audio/files/<id>.<ext>                     uploaded reference audio
   outputs/<id>.wav | <id>.srt                语音生成 / 字幕生成 results
   tasks/<task_id>.json                       task record (queue state and history)
@@ -28,14 +27,14 @@ Every record file is `<kind>/<id>.json` with `id`, `schema_version`, `created_at
 { "name": "婚姻调节室-章节", "id": "…", "schema_version": 1, "created_at": "…", "updated_at": "…" }
 ```
 
-A project's sessions are the session records whose `project_id` matches; its folder `projects/<id>/` holds their audio.
+A project's sessions are the session records whose `project_id` matches; a project has no folder. Deleting a project deletes its sessions with their audio.
 
 ### `sessions/<id>.json`
 
 ```json
 {
   "name": "05-01",
-  "project_id": "…",
+  "project_id": "…" | null,
   "bindings": [{ "speaker": "卡维", "role_id": "…" | null, "audio_id": "…" | null }],
   "generation": { "mode": "normal", "top_p": 0.8, "…": "…" },
   "interval": 0.5,
@@ -47,6 +46,7 @@ A project's sessions are the session records whose `project_id` matches; its fol
 }
 ```
 
+- `project_id`: the project it belongs to, or `null` for none. Changing it moves no files.
 - `bindings`: speaker name in the text → role and reference audio. `role_id: null` means no role (any audio).
 - `generation`: inference parameters used for new takes.
 - `lines`: in display / merge order.
@@ -54,7 +54,7 @@ A project's sessions are the session records whose `project_id` matches; its fol
 - `text`: the lines as `[speaker] text`, derived on every save (read-only convenience).
 - `outputs`: merge results, oldest first.
 
-The same JSON is mirrored to `projects/<project_id>/sessions/<id>/index.json` on every save, so a session folder is self-describing; the API reads `sessions/`.
+The session's audio lives in `sessions/<id>/`, beside its record.
 
 **Line**
 
@@ -74,12 +74,14 @@ The same JSON is mirrored to `projects/<project_id>/sessions/<id>/index.json` on
 
 ```json
 {
-  "id": "…", "take_index": 2, "created_at": "…", "audio_id": "…",
+  "id": "…", "take_index": 2, "created_at": "…",
   "snapshot": { "text": "…", "speaker": "卡维", "audio_id": "<reference audio>", "generation": { … } }
 }
 ```
 
-`snapshot` is what the take was generated from; when it differs from the line's current text, binding or parameters, the UI marks the take as stale. Its audio file is `projects/<p>/sessions/<s>/takes/<line_id>/<take_index>_<take_id>.wav`.
+`snapshot` is what the take was generated from (`snapshot.audio_id` is the reference audio); when it differs from the line's current text, binding or parameters, the UI marks the take as stale.
+
+A take has **no audio record**: its file is derived as `sessions/<session_id>/takes/<line_id>/<take_index>_<take_id>.wav` and served by `GET /api/sessions/{s}/lines/{l}/takes/{t}/file`.
 
 ### `roles/<id>.json`
 
@@ -99,10 +101,10 @@ Same `bindings` / `generation` shapes as a session; copied into a session when i
 
 ### `audio/<id>.json`
 
-One record per file the app can play, download or reference; everything else points to audio by this id.
+One record per audio file other than takes (references, uploads, outputs, merges); bindings, snapshots, tasks and session `outputs` point to audio by this id.
 
 ```json
-{ "name": "06-02-0824 #35 Take 1", "path": "projects/…/takes/…/1_….wav", "size": 157740, "id": "…", … }
+{ "name": "Take 验证示例", "path": "sessions/…/merged/….wav", "size": 157740, "id": "…", … }
 { "name": "卡维/0 正常.wav", "path": "卡维/0 正常.wav", "source": "samples", "size": 651692, "id": "sample-…", … }
 ```
 
@@ -112,8 +114,7 @@ One record per file the app can play, download or reference; everything else poi
 
 | Kind | `path` | Typical name |
 |---|---|---|
-| Take | `projects/<p>/sessions/<s>/takes/<line>/<n>_<take>.wav` | `#35 · Take 2` |
-| Merge | `projects/<p>/sessions/<s>/merged/<id>.wav` | session name |
+| Merge | `sessions/<s>/merged/<id>.wav` | session name |
 | 语音生成 / 字幕 output | `outputs/<id>.wav` / `.srt` | first words of the text / source name |
 | Upload | `audio/files/<id>.<ext>` | original file name |
 | samples file | `<relative path in samples/>` (`source: "samples"`) | relative path |
@@ -144,7 +145,7 @@ An upload identical to an existing upload or samples file is not stored; the exi
 | `audio/files/`: upload | Not removed automatically |
 | samples records: first use | Never; the files belong to `samples/` and are never touched |
 
-Protected from every deletion: current takes, any audio referenced by a binding or take snapshot, and inputs of queued or running tasks.
+Protected from every deletion: current takes, reference audio used by a binding or take snapshot, and inputs of queued or running tasks. Take cleanup is refused while the session has a queued or running task.
 
 ## Legacy fields
 

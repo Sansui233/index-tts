@@ -145,7 +145,8 @@ class Audio:
         return self.sample(path)
 
     def referenced(self, exclude_session=None):
-        """Ids cleanup must keep: bindings, take references, active tasks."""
+        """Ids that must not be deleted: bound reference audio, take snapshots' reference
+        audio, inputs of active tasks."""
         ids = set(self.tasks.active_audio_ids())
         for entry in self.store.list("presets") + self.store.list("sessions"):
             if entry["id"] == exclude_session:
@@ -153,8 +154,6 @@ class Audio:
             ids.update(b.get("audio_id") for b in entry["bindings"])
             for line in entry.get("lines", []):
                 for take in line["takes"]:
-                    ids.add(take.get("snapshot", {}).get("audio_id"))
-                    if take["id"] == line["current_take_id"]:
-                        ids.add(take.get("audio_id"))
+                    ids.add(take["snapshot"].get("audio_id"))
         ids.discard(None)
         return ids

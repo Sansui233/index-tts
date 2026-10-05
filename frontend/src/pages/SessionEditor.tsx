@@ -122,8 +122,8 @@ export function SessionEditor({ id, projects, back }: { id: string; projects: Na
             <ArrowLeft size={16} />
           </button>
           <nav className="flex min-w-0 flex-1 flex-wrap items-center gap-x-1 text-[13px] leading-snug">
-            <button className="max-w-[24rem] cursor-pointer text-left text-muted [overflow-wrap:anywhere] hover:text-fg" onClick={() => go(`projects/${session.project_id}`)}>
-              {project?.name || "项目"}
+            <button className="max-w-[24rem] cursor-pointer text-left text-muted [overflow-wrap:anywhere] hover:text-fg" onClick={() => go(session.project_id ? `projects/${session.project_id}` : "sessions")}>
+              {project?.name || "无项目"}
             </button>
             <ChevronRight size={13} className="shrink-0 text-muted" />
             <NameInput className="max-w-[32rem] py-0.5" label="Session 名称" value={session.name} onSave={rename} />
@@ -214,7 +214,8 @@ export function SessionEditor({ id, projects, back }: { id: string; projects: Na
               onSaved={(s) => {
                 setSession(s);
                 setDraft(toDraft(s));
-                if (back.startsWith("projects/") && s.project_id !== session.project_id) go(`projects/${s.project_id}/sessions/${s.id}`);
+                // Keep the URL (and the sidebar) in step with the session's project.
+                if (back.startsWith("projects/") && s.project_id !== session.project_id) go(s.project_id ? `projects/${s.project_id}/sessions/${s.id}` : `sessions/${s.id}`);
               }}
             />
           </Section>

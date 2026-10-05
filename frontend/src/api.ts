@@ -48,10 +48,10 @@ export const defaultGeneration: Generation = {
   max_text_tokens_per_sentence: 120,
   sentences_bucket_max_size: 4,
 };
+/* A take's audio has no record; its file is derived from session, line and take. */
 export interface Take {
   id: string;
   take_index: number;
-  audio_id: string | null;
   created_at: string;
   snapshot: { text: string; speaker: string; audio_id: string | null; generation: Generation };
 }
@@ -68,7 +68,7 @@ export interface Preset extends Named {
   generation: Generation;
 }
 export interface Session extends Preset {
-  project_id: string;
+  project_id: string | null; // null: not in any project
   interval: number;
   lines: Line[];
   outputs: string[];
@@ -127,6 +127,7 @@ export const api = {
   del: <T>(path: string) => request<T>("DELETE", path),
 };
 
+export const takeUrl = (sessionId: string, lineId: string, take: Take) => `/api/sessions/${sessionId}/lines/${lineId}/takes/${take.id}/file`;
 export const fileUrl = (id: string, download = false) =>
   `/api/audio/${id}/file${download ? "?download=true" : ""}`;
 
@@ -141,15 +142,14 @@ export const isAudio = (a: Audio) => !a.path.endsWith(".srt");
 
 /* Where an audio record comes from. Files from disk (samples, uploads) are named by their
    file name; generated audio only has a display name (the file on disk is an id). */
-export type AudioKind = "sample" | "upload" | "speech" | "subtitle" | "merge" | "take";
+export type AudioKind = "sample" | "upload" | "speech" | "subtitle" | "merge";
 export function audioKind(a: Audio): AudioKind {
   if (a.source === "samples") return "sample";
   if (a.path.startsWith("audio/files/")) return "upload";
   if (a.path.includes("/merged/")) return "merge";
-  if (a.path.includes("/takes/")) return "take";
   return a.path.endsWith(".srt") ? "subtitle" : "speech";
 }
-export const GENERATED: Partial<Record<AudioKind, string>> = { speech: "语音生成", subtitle: "字幕", merge: "合并", take: "Take" };
+export const GENERATED: Partial<Record<AudioKind, string>> = { speech: "语音生成", subtitle: "字幕", merge: "合并" };
 export const currentTake = (l: Line) => l.takes.find((t) => t.id === l.current_take_id);
 export const resultAudio = (t: Task) => (t.result && "path" in t.result ? t.result : null);
 export const taskTitle = (t: Task) => t.title || resultAudio(t)?.name || "";
