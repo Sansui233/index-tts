@@ -1,98 +1,106 @@
-from .storage import uid
+"""Queue GPU work on the single task worker: speech, subtitles, session takes, merge."""
+
+import re
+from pathlib import Path
+from .sessions import current_take, folder
 
 
-class GenerationService:
-    def __init__(self, store, audio, sessions, engine):
-        self.store, self.audio, self.sessions, self.engine = (
-            store,
-            audio,
-            sessions,
-            engine,
-        )
+def file_name(text, suffix, limit=40):
+    """Readable download name from user text; drops characters Windows forbids."""
+    stem = re.sub(r'[\\/:*?"<>|\s]+', " ", text).strip()[:limit].strip()
+    return (stem or "output") + suffix
 
-    def speech(self, request, progress):
-        path = self.store.path(f"outputs/{uid()}.wav")
-        path.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            self.engine.infer(
-                self.audio.path(request.audio_id),
-                request.text,
-                path,
-                request.generation.model_dump(),
-                progress,
-            )
-            return self.audio.register(path)
-        except Exception:
-            path.unlink(missing_ok=True)
-            raise
 
-    def generate_lines(self, session_id, jobs, progress):
-        results = []
-        for position, (line_id, reserved) in enumerate(jobs):
-            progress(position / len(jobs), f"生成 {position + 1}/{len(jobs)}")
-            take, path, revision, selection = reserved
+class Generation:
+    def __init__(self, store, tasks, audio, sessions, engine):
+        self.store, self.tasks, self.audio = store, tasks, audio
+        self.sessions, self.engine = sessions, engine
+
+    def load_model(self):
+        return self.tasks.submit("model-load", self.engine.load, title="加载模型")
+
+    def unload_model(self):
+        return self.tasks.submit("model-unload", self.engine.unload, title="卸载模型")
+
+    def speech(self, request):
+        source = self.audio.path(request.audio_id)
+
+        def run(progress):
+            path = self.audio.new_path(".wav", "outputs")
             try:
-                snapshot = take["snapshot"]
-                self.engine.infer(
-                    self.audio.path(snapshot["audio_id"]),
-                    snapshot["text"],
-                    path,
-                    snapshot["generation"],
-                    lambda value=None, desc="", **kw: progress(
-                        (position + (value or 0)) / len(jobs), desc
-                    ),
-                )
-                self.sessions.complete(
-                    session_id, line_id, take, path, revision, selection
-                )
-                results.append(take["id"])
+                self.engine.infer(source, request.text, path, request.generation.model_dump(), progress)
+                return self.audio.register(path, file_name(request.text, ".wav"))
             except Exception:
                 path.unlink(missing_ok=True)
                 raise
-        return {"session_id": session_id, "take_ids": results}
 
-    def merge(self, session_id, progress):
+        return self.tasks.submit("speech", run, audio_ids=[request.audio_id], title=request.text[:80])
+
+    def subtitles(self, request):
+        source = self.audio.path(request.audio_id)
+        name = self.store.get("audio", request.audio_id)["name"]
+
+        def run(progress):
+            path = self.audio.new_path(".srt", "outputs")
+            self.engine.subtitles(source, path, request.model, request.language, progress)
+            return self.audio.register(path, file_name(Path(name).stem, ".srt", 80))
+
+        return self.tasks.submit("subtitles", run, audio_ids=[request.audio_id], title=name)
+
+    def session(self, key, line_id=None):
+        with self.store.lock:
+            jobs = self.sessions.reserve(key, [line_id] if line_id else None)
+            name = self.store.get("sessions", key)["name"]
+            title = f"{name} · #{jobs[0]['index']} {jobs[0]['take']['snapshot']['text'][:40]}" if line_id else f"{name} · 全部 {len(jobs)} 句"
+
+            def run(progress):
+                count = len(jobs)
+                for position, job in enumerate(jobs):
+                    snapshot = job["take"]["snapshot"]
+                    step = lambda value=None, desc="": progress((position + (value or 0)) / count, desc)
+                    step(0, f"生成 {position + 1}/{count}")
+                    try:
+                        self.engine.infer(
+                            self.audio.path(snapshot["audio_id"]),
+                            snapshot["text"],
+                            job["path"],
+                            snapshot["generation"],
+                            step,
+                        )
+                        self.sessions.complete(key, job)
+                    except Exception:
+                        job["path"].unlink(missing_ok=True)
+                        raise
+                return {"session_id": key, "take_ids": [job["take"]["id"] for job in jobs]}
+
+            audio_ids = [job["take"]["snapshot"]["audio_id"] for job in jobs]
+            line_ids = [job["line_id"] for job in jobs]
+            return self.tasks.submit("session-generate", run, [key], audio_ids, title, line_ids)
+
+    def merge(self, key):
+        name = self.store.get("sessions", key)["name"]
+        return self.tasks.submit("merge", lambda progress: self._merge(key, progress), [key], title=name)
+
+    def _merge(self, key, progress):
         from pydub import AudioSegment
 
         with self.store.lock:
-            session = self.store.get("sessions", session_id)
+            session = self.store.get("sessions", key)
             paths = []
             for line in session["lines"]:
-                take = next(
-                    (t for t in line["takes"] if t["id"] == line["current_take_id"]),
-                    None,
-                )
+                take = current_take(line)
                 if not take or not take.get("audio_id"):
                     raise ValueError(f"句子 #{line['index']} 没有当前音频")
                 paths.append(self.audio.path(take["audio_id"]))
         if not paths:
             raise ValueError("没有句子")
+        gap = AudioSegment.silent(duration=session["interval"] * 1000)
         combined = AudioSegment.empty()
         for index, path in enumerate(paths):
             progress(index / len(paths), f"合并 {index + 1}/{len(paths)}")
-            if index:
-                combined += AudioSegment.silent(duration=session["interval"] * 1000)
-            combined += AudioSegment.from_file(path)
-        output = self.store.path(
-            f"projects/{session['project_id']}/sessions/{session_id}/merged/{uid()}.wav"
-        )
-        output.parent.mkdir(parents=True, exist_ok=True)
+            combined += (gap if index else AudioSegment.empty()) + AudioSegment.from_file(path)
+        output = self.audio.new_path(".wav", f"{folder(session['project_id'], key)}/merged")
         combined.export(output, format="wav")
         record = self.audio.register(output, session["name"] + ".wav")
-        with self.store.lock:
-            current = self.store.get("sessions", session_id)
-            current["outputs"].append(record["id"])
-            self.sessions.save(current)
+        self.sessions.add_output(key, record["id"])
         return record
-
-    def subtitles(self, request, progress):
-        output = self.store.path(f"outputs/{uid()}.srt")
-        output.parent.mkdir(parents=True, exist_ok=True)
-        self.engine.subtitles(
-            self.audio.path(request.audio_id),
-            output,
-            request.model,
-            request.language,
-            progress,
-        )
-        return self.audio.register(output)

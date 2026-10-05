@@ -1,350 +1,329 @@
-import { useEffect, useState } from "react";
-import {
-  Mic,
-  FileText,
-  Users,
-  Folder,
-  Settings,
-  Sun,
-  Moon,
-  Monitor,
-  ArrowLeft,
-  Activity,
-} from "react-feather";
-import { api, fileUrl, type Named, type Task } from "./api";
-import { Player } from "./components";
-import { Speech } from "./features/Speech";
-import { Roles } from "./features/Roles";
-import { SessionList } from "./features/SessionList";
-import { SessionEditor } from "./features/SessionEditor";
+import { useEffect, useState, type MouseEvent, type ReactNode } from "react";
+import { Activity, AlertCircle, ArrowLeft, CheckCircle, CheckSquare, ChevronRight, FileText, Folder, Mic, Monitor, Moon, Plus, Settings as Gear, Sun, Trash2, Users } from "react-feather";
+import { api, isActive, taskTitle, type Named } from "./api";
+import { TaskItem } from "./TaskItem";
+import { AppProvider, go, useAction, useApp, useLoad, useRoute, useTheme, type Route } from "./state";
+import { ask, confirm, cx, Dialogs, Progress, Segmented, Sheet, Spinner } from "./ui";
+import { Presets } from "./pages/Presets";
+import { Roles } from "./pages/Roles";
+import { SessionEditor } from "./pages/SessionEditor";
+import { Projects, Sessions } from "./pages/Sessions";
+import { Settings } from "./pages/Settings";
+import { Speech } from "./pages/Speech";
+import { Subtitles } from "./pages/Subtitles";
 
 export default function App() {
-  const [view, setView] = useState("speech"),
-    [projectMenu, setProjectMenu] = useState(false),
-    [projects, setProjects] = useState<Named[]>([]),
-    [projectId, setProjectId] = useState<string | null>(null),
-    [sessionId, setSessionId] = useState<string | null>(null),
-    [theme, setTheme] = useState(
-      localStorage.getItem("webui3-theme") || "system",
-    ),
-    [tasks, setTasks] = useState<Task[]>([]),
-    [model, setModel] = useState("unloaded"),
-    [error, setError] = useState(""),
-    [taskPanel, setTaskPanel] = useState(false);
-  const project = projects.find((p) => p.id === projectId) || null;
-  const refreshProjects = () =>
-    api<Named[]>("/projects")
-      .then(setProjects)
-      .catch((e) => setError(e.message));
-  useEffect(() => {
-    void refreshProjects();
-  }, []);
-  useEffect(() => {
-    const media = matchMedia("(prefers-color-scheme: dark)");
-    const apply = () =>
-      (document.documentElement.dataset.theme =
-        theme === "system" ? (media.matches ? "dark" : "light") : theme);
-    apply();
-    localStorage.setItem("webui3-theme", theme);
-    media.addEventListener("change", apply);
-    return () => media.removeEventListener("change", apply);
-  }, [theme]);
-  useEffect(() => {
-    let live = true;
-    let timer: ReturnType<typeof setTimeout>;
-    const c = new AbortController();
-    async function poll() {
-      let delay = 5000;
-      try {
-        const [t, m] = await Promise.all([
-          api<Task[]>("/tasks", "GET", undefined, c.signal),
-          api<{ state: string }>("/models", "GET", undefined, c.signal),
-        ]);
-        if (live) {
-          setTasks(t);
-          setModel(m.state);
-          if (t.some((t) => ["queued", "running"].includes(t.status)))
-            delay = 1000;
-          setError("");
-        }
-      } catch (e) {
-        if (live) setError(String(e));
-      }
-      if (live) timer = setTimeout(poll, delay);
-    }
-    void poll();
-    return () => {
-      live = false;
-      clearTimeout(timer);
-      c.abort();
-    };
-  }, []);
-  const onTask = (task: Task) => {
-    setTasks((t) => [task, ...t.filter((x) => x.id !== task.id)]);
-    setTaskPanel(true);
-  };
-  const taskVersion = tasks
-    .filter((t) => t.session_ids?.includes(sessionId || ""))
-    .map((t) => t.id + t.status)
-    .join(",");
-  const navigate = (page: string) => {
-    setView(page);
-    setSessionId(null);
-  };
-  const active = tasks.filter((t) => ["running", "queued"].includes(t.status));
   return (
-    <div className="app">
-      <aside className="sidebar">
-        <div className="brand">
-          <span className="brand-mark">
-            <Activity size={22} />
+    <AppProvider>
+      <Shell />
+      <Dialogs />
+      <Toasts />
+    </AppProvider>
+  );
+}
+
+function Shell() {
+  const route = useRoute();
+  const projects = useLoad<Named[]>("/projects", []);
+  const [tasksOpen, setTasksOpen] = useState(false);
+  const inProjects = route.page === "projects" || (route.page === "session" && !!route.projectId);
+  const project = "projectId" in route ? projects.data.find((p) => p.id === route.projectId) : undefined;
+
+  return (
+    <div className="flex h-full">
+      <aside className="flex w-60 shrink-0 flex-col border-r border-line bg-panel">
+        <div className="flex h-14 items-center gap-2.5 px-4">
+          <span className="grid size-7 place-items-center rounded-lg bg-accent text-accent-fg">
+            <Activity size={15} strokeWidth={2.5} />
           </span>
-          <div>
-            IndexTTS<small>声音工作台</small>
-          </div>
-          <span className="version">3</span>
+          <span className="font-semibold tracking-tight">IndexTTS</span>
+          <span className="chip chip-accent">WebUI</span>
         </div>
-        <nav>
-          {projectMenu ? (
-            <>
-              <button onClick={() => setProjectMenu(false)}>
-                <ArrowLeft size={17} />
-                返回主菜单
-              </button>
-              <p className="nav-label">项目</p>
-              {projects.map((p) => (
-                <button
-                  key={p.id}
-                  className={
-                    projectId === p.id && view === "sessions" ? "active" : ""
-                  }
-                  onClick={() => {
-                    setProjectId(p.id);
-                    navigate("sessions");
-                  }}
-                >
-                  <Folder size={17} />
-                  {p.name}
-                </button>
-              ))}
-              <button
-                onClick={async () => {
-                  const name = prompt("项目名称");
-                  if (name)
-                    try {
-                      const p = await api<Named>("/projects", "POST", { name });
-                      await refreshProjects();
-                      setProjectId(p.id);
-                      navigate("sessions");
-                    } catch (e) {
-                      setError(String(e));
-                    }
-                }}
-              >
-                ＋ 新建项目
-              </button>
-            </>
-          ) : (
-            <>
-              <p className="nav-label">创作</p>
-              <button
-                className={view === "speech" ? "active" : ""}
-                onClick={() => navigate("speech")}
-              >
-                <Mic size={18} />
-                语音生成
-              </button>
-              <button
-                className={view === "subtitles" ? "active" : ""}
-                onClick={() => navigate("subtitles")}
-              >
-                <FileText size={18} />
-                字幕生成
-              </button>
-              <button
-                className={view === "sessions" ? "active" : ""}
-                onClick={() => {
-                  setProjectId(null);
-                  navigate("sessions");
-                }}
-              >
-                <Users size={18} />
-                多人对话生成
-              </button>
-              <div className="subnav">
-                <button
-                  className={view === "roles" ? "active" : ""}
-                  onClick={() => navigate("roles")}
-                >
-                  角色管理
-                </button>
-                <button
-                  onClick={() => {
-                    setProjectMenu(true);
-                    setProjectId(null);
-                    navigate("sessions");
-                  }}
-                >
-                  项目管理
-                </button>
-              </div>
-            </>
-          )}
+        <nav className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 py-1">
+          {inProjects ? <ProjectMenu route={route} projects={projects.data} reload={projects.reload} /> : <MainMenu route={route} />}
         </nav>
-        <div className="sidebar-bottom">
-          <div className="model-state">
-            <span className={model === "loaded" ? "dot loaded" : "dot"} />
-            <span>
-              模型 ·{" "}
-              {(
-                {
-                  loaded: "已加载",
-                  loading: "加载中",
-                  unloaded: "未加载",
-                  unloading: "卸载中",
-                  error: "加载失败",
-                } as Record<string, string>
-              )[model] || model}
-            </span>
-          </div>
-          <div className="row between">
-            <button
-              aria-label="设置"
-              className={view === "settings" ? "active" : ""}
-              onClick={() => navigate("settings")}
-            >
-              <Settings size={18} />
-            </button>
-            <div className="row theme">
-              {[
-                { id: "light", Icon: Sun, label: "日间" },
-                { id: "dark", Icon: Moon, label: "夜间" },
-                { id: "system", Icon: Monitor, label: "跟随系统" },
-              ].map(({ id, Icon, label }) => (
-                <button
-                  key={id}
-                  title={label}
-                  aria-label={label}
-                  className={theme === id ? "active" : ""}
-                  onClick={() => setTheme(id)}
-                >
-                  <Icon size={16} />
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        <Footer route={route} />
       </aside>
-      <main>
-        <div className="topbar">
-          <span>本地工作区</span>
-          <button onClick={() => setTaskPanel(!taskPanel)}>
-            <Activity size={16} />
-            任务{" "}
-            {active.length > 0 && (
-              <span className="badge">{active.length}</span>
-            )}
-          </button>
-        </div>
-        {error && <p className="error global-error">{error}</p>}
-        {sessionId ? (
-          <SessionEditor
-            key={sessionId}
-            id={sessionId}
-            projects={projects}
-            onBack={() => setSessionId(null)}
-            onTask={onTask}
-            taskVersion={taskVersion}
-          />
-        ) : view === "speech" ? (
-          <Speech onTask={onTask} />
-        ) : view === "subtitles" ? (
-          <Speech key="subtitles" subtitle onTask={onTask} />
-        ) : view === "roles" ? (
-          <Roles />
-        ) : view === "sessions" ? (
-          <SessionList
-            project={project}
-            projects={projects}
-            open={setSessionId}
-            refreshProjects={() => void refreshProjects()}
-          />
-        ) : (
-          <section className="page">
-            <header>
-              <p className="eyebrow">工作区</p>
-              <h1>设置</h1>
-            </header>
-            <div className="card stack">
-              <h2>模型与显存</h2>
-              <p>生成任务会自动加载模型。卸载操作在当前推理完成后执行。</p>
-              <div className="row">
-                <button
-                  onClick={() =>
-                    api<Task>("/models/load", "POST")
-                      .then(onTask)
-                      .catch((e) => setError(e.message))
-                  }
-                >
-                  加载 IndexTTS
-                </button>
-                <button
-                  onClick={() =>
-                    api<Task>("/models/unload", "POST")
-                      .then(onTask)
-                      .catch((e) => setError(e.message))
-                  }
-                >
-                  卸载模型
-                </button>
-              </div>
-              <p className="muted">
-                数据目录：webui3/data
-                <br />
-                字幕仅使用 checkpoints/whisper 内的本地模型。
-              </p>
-            </div>
-          </section>
-        )}
+      <main className="min-w-0 flex-1 overflow-y-auto pb-16">
+        <Content route={route} project={project} projects={projects.data} reloadProjects={projects.reload} />
       </main>
-      {taskPanel && (
-        <aside className="task-panel">
-          <div className="row between">
-            <h2>任务</h2>
-            <button onClick={() => setTaskPanel(false)}>关闭</button>
-          </div>
-          {tasks.slice(0, 30).map((t) => (
-            <div className="task" key={t.id}>
-              <div className="row between">
-                <strong>{t.kind}</strong>
-                <span className="badge">{t.status}</span>
-              </div>
-              <progress max="1" value={t.progress} />
-              <p className={t.error ? "error" : "muted"}>
-                {t.error || t.message}
-              </p>
-              {["queued", "running"].includes(t.status) && (
-                <button
-                  onClick={() =>
-                    api("/tasks/" + t.id + "/cancel", "POST").catch((e) =>
-                      setError(e.message),
-                    )
-                  }
-                >
-                  取消
-                </button>
-              )}
-              {t.result?.id &&
-                (t.result.path.endsWith(".srt") ? (
-                  <a href={fileUrl(t.result.id, true)}>下载 SRT 字幕</a>
-                ) : (
-                  <Player id={t.result.id} />
-                ))}
-            </div>
-          ))}
-          {!tasks.length && <p className="muted">暂无任务</p>}
-        </aside>
+      <TaskDock onOpen={() => setTasksOpen(true)} />
+      <TaskSheet open={tasksOpen} onClose={() => setTasksOpen(false)} />
+    </div>
+  );
+}
+
+function Content({ route, project, projects, reloadProjects }: { route: Route; project?: Named; projects: Named[]; reloadProjects: () => void }) {
+  switch (route.page) {
+    case "speech":
+      return <Speech />;
+    case "subtitles":
+      return <Subtitles />;
+    case "roles":
+      return <Roles />;
+    case "presets":
+      return <Presets />;
+    case "settings":
+      return <Settings />;
+    case "sessions":
+      return <Sessions projects={projects} reloadProjects={reloadProjects} />;
+    case "projects":
+      return route.projectId ? (
+        <Sessions key={route.projectId} project={project} projects={projects} reloadProjects={reloadProjects} />
+      ) : (
+        <Projects projects={projects} reload={reloadProjects} />
+      );
+    case "session":
+      return <SessionEditor key={route.sessionId} id={route.sessionId} projects={projects} back={route.projectId ? `projects/${route.projectId}` : "sessions"} />;
+  }
+}
+
+function NavItem({ active, icon, children, onClick, trailing, indent }: { active?: boolean; icon?: ReactNode; children: ReactNode; onClick: () => void; trailing?: ReactNode; indent?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cx(
+        "flex h-8 w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 text-left transition-colors",
+        indent && "pl-9",
+        active ? "bg-accent-soft font-medium text-accent" : "text-fg/80 hover:bg-hover hover:text-fg",
       )}
+    >
+      {icon}
+      <span className="min-w-0 flex-1 truncate">{children}</span>
+      {trailing}
+    </button>
+  );
+}
+
+function MainMenu({ route }: { route: Route }) {
+  return (
+    <>
+      <NavItem icon={<Mic size={15} />} active={route.page === "speech"} onClick={() => go("speech")}>
+        语音生成
+      </NavItem>
+      <NavItem icon={<FileText size={15} />} active={route.page === "subtitles"} onClick={() => go("subtitles")}>
+        字幕生成
+      </NavItem>
+      <NavItem icon={<Users size={15} />} active={route.page === "sessions" || route.page === "session"} onClick={() => go("sessions")}>
+        多人对话生成
+      </NavItem>
+      <NavItem indent active={route.page === "roles"} onClick={() => go("roles")}>
+        角色管理
+      </NavItem>
+      <NavItem indent active={route.page === "presets"} onClick={() => go("presets")}>
+        预设管理
+      </NavItem>
+      <NavItem indent onClick={() => go("projects")} trailing={<ChevronRight size={14} className="text-muted" />}>
+        项目管理
+      </NavItem>
+    </>
+  );
+}
+
+function ProjectMenu({ route, projects, reload }: { route: Route; projects: Named[]; reload: () => void }) {
+  const run = useAction();
+  const current = "projectId" in route ? route.projectId : undefined;
+  async function create() {
+    const values = await ask("新建项目", [{ key: "name", label: "项目名称" }], "创建");
+    if (!values) return;
+    const p = await run(() => api.post<Named>("/projects", values));
+    if (p) {
+      reload();
+      go(`projects/${p.id}`);
+    }
+  }
+  return (
+    <>
+      <NavItem icon={<ArrowLeft size={15} />} onClick={() => go("sessions")}>
+        返回
+      </NavItem>
+      <div className="flex items-center justify-between px-2.5 pt-3 pb-1">
+        <button className="cursor-pointer text-[11px] font-semibold tracking-wide text-muted uppercase hover:text-fg" onClick={() => go("projects")}>
+          项目
+        </button>
+        <button className="btn btn-ghost btn-sm btn-icon" title="新建项目" onClick={() => void create()}>
+          <Plus size={14} />
+        </button>
+      </div>
+      {projects.map((p) => (
+        <NavItem key={p.id} icon={<Folder size={15} />} active={current === p.id} onClick={() => go(`projects/${p.id}`)}>
+          {p.name}
+        </NavItem>
+      ))}
+      {!projects.length && <p className="px-2.5 py-2 text-xs text-muted">还没有项目</p>}
+    </>
+  );
+}
+
+const MODEL_LABEL: Record<string, string> = { loaded: "模型已加载", loading: "模型加载中", unloaded: "模型未加载", unloading: "模型卸载中", error: "模型加载失败" };
+
+function Footer({ route }: { route: Route }) {
+  const { model } = useApp();
+  const [theme, setTheme] = useTheme();
+  return (
+    <div className="border-t border-line p-2">
+      <button onClick={() => go("settings")} title="模型管理" className="mb-1.5 flex h-8 w-full cursor-pointer items-center gap-2 rounded-md px-2.5 text-xs text-muted hover:bg-hover">
+        <span className={cx("size-2 rounded-full", model === "loaded" ? "bg-ok" : model === "error" ? "bg-danger" : model.endsWith("ing") ? "animate-pulse bg-warn" : "bg-line")} />
+        <span className="flex-1 text-left">{MODEL_LABEL[model] || model}</span>
+      </button>
+      <div className="flex items-center justify-between">
+        <button title="设置" aria-label="设置" className={cx("btn btn-ghost btn-icon", route.page === "settings" && "text-accent")} onClick={() => go("settings")}>
+          <Gear size={16} />
+        </button>
+        <Segmented
+          value={theme}
+          onChange={setTheme}
+          options={[
+            { value: "light", label: <Sun size={13} />, title: "日间" },
+            { value: "dark", label: <Moon size={13} />, title: "夜间" },
+            { value: "system", label: <Monitor size={13} />, title: "跟随系统" },
+          ]}
+        />
+      </div>
+    </div>
+  );
+}
+
+/* Bottom-right, next to where the drawer opens: idle icon, or live progress while working. */
+function TaskDock({ onOpen }: { onOpen: () => void }) {
+  const { tasks, started, unseen } = useApp();
+  const active = tasks.filter(isActive);
+  const current = active.find((t) => t.status === "running") || active[0];
+  const running = active.some((t) => t.status === "running");
+  return (
+    <button
+      onClick={onOpen}
+      aria-label={unseen ? "任务（有新完成）" : "任务"}
+      className={cx(
+        "fixed right-4 bottom-4 z-30 flex h-10 cursor-pointer items-center gap-2.5 rounded-full border border-line bg-panel shadow-lg transition-all hover:border-accent/40",
+        current ? "w-72 pr-4 pl-3" : "w-10 justify-center",
+      )}
+      title="任务"
+    >
+      {running && (
+        <span className="pointer-events-none absolute inset-0 -z-10 overflow-hidden rounded-[inherit]">
+          <span className="task-wave" />
+          <span className="task-wave task-wave-back" />
+        </span>
+      )}
+      {started > 0 && <span key={started} className="task-focus" />}
+      {unseen && <span className="absolute -top-1 -right-1 size-2.5 rounded-full bg-accent ring-2 ring-bg" />}
+      {current ? (
+        <>
+          <Spinner className="shrink-0" />
+          <span className="min-w-0 flex-1 text-left">
+            <span className="block truncate text-xs font-medium">{taskTitle(current) || current.message || "排队中"}</span>
+            <Progress value={current.progress} className="mt-1" />
+          </span>
+          {active.length > 1 && <span className="chip chip-accent">+{active.length - 1}</span>}
+        </>
+      ) : (
+        <Activity size={16} className="text-muted" />
+      )}
+    </button>
+  );
+}
+
+function TaskSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const { tasks, unseen, markSeen, refreshTasks, notify } = useApp();
+  const run = useAction();
+  const [selected, setSelected] = useState<Set<string> | null>(null);
+  // Viewing the sheet, or having it open as tasks finish, counts as seen.
+  useEffect(() => {
+    if (open && unseen) markSeen();
+  }, [open, unseen, markSeen]);
+  useEffect(() => {
+    if (!open) setSelected(null);
+  }, [open]);
+
+  const shown = tasks.slice(0, 50);
+  const finished = shown.filter((t) => !isActive(t));
+  const toggle = (id: string) =>
+    setSelected((s) => {
+      const next = new Set(s);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
+  async function remove(e: MouseEvent, path: string, body: unknown, message: string, action: string) {
+    if (!(await confirm(e, message, action))) return;
+    const result = await run(() => api.post<{ deleted: number }>(path, body));
+    if (!result) return;
+    notify(`已删除 ${result.deleted} 条任务记录`);
+    setSelected(null);
+    refreshTasks();
+  }
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={selected ? `已选 ${selected.size} 项` : "任务"}
+      actions={
+        <>
+          <button
+            className={cx("tip btn btn-ghost btn-icon", selected && "bg-hover text-fg")}
+            data-tip={selected ? "退出多选" : "多选"}
+            aria-label="多选"
+            disabled={!finished.length}
+            onClick={() => setSelected(selected ? null : new Set())}
+          >
+            <CheckSquare size={15} />
+          </button>
+          {!selected && (
+            <button
+              className="tip btn btn-ghost btn-icon btn-danger"
+              data-tip="清除已结束的任务"
+              aria-label="清除已结束的任务"
+              disabled={!finished.length}
+              onClick={(e) => void remove(e, "/tasks/clear", undefined, "清除所有已结束（完成、失败、取消、中断）的任务记录？生成的音频不受影响。", "清除")}
+            >
+              <Trash2 size={15} />
+            </button>
+          )}
+        </>
+      }
+      footer={
+        selected && (
+          <>
+            <button className="btn btn-ghost btn-sm" onClick={() => setSelected(selected.size === finished.length ? new Set() : new Set(finished.map((t) => t.id)))}>
+              {selected.size === finished.length ? "全不选" : "全选"}
+            </button>
+            <span className="flex-1" />
+            <button className="btn btn-sm" onClick={() => setSelected(null)}>
+              取消
+            </button>
+            <button
+              className="btn btn-sm btn-danger"
+              disabled={!selected.size}
+              onClick={(e) => void remove(e, "/tasks/delete", { ids: [...selected] }, `删除所选 ${selected.size} 条任务记录？生成的音频不受影响。`, "删除")}
+            >
+              <Trash2 size={13} />
+              删除
+            </button>
+          </>
+        )
+      }
+    >
+      <div className="-mt-2.5 divide-y divide-line">
+        {shown.map((t) => (
+          <TaskItem key={t.id} task={t} selecting={!!selected} selected={selected?.has(t.id)} onSelect={() => toggle(t.id)} />
+        ))}
+      </div>
+      {!tasks.length && <p className="py-8 text-center text-muted">暂无任务</p>}
+    </Sheet>
+  );
+}
+
+function Toasts() {
+  const { toasts } = useApp();
+  return (
+    <div className="pointer-events-none fixed top-4 right-4 z-[60] flex w-80 flex-col gap-2">
+      {toasts.map((t) => (
+        <div key={t.id} role="status" className={cx("card flex items-start gap-2 px-3.5 py-2.5 text-[13px] shadow-lg", t.error && "border-danger/40")}>
+          {t.error ? <AlertCircle size={15} className="mt-px shrink-0 text-danger" /> : <CheckCircle size={15} className="mt-px shrink-0 text-ok" />}
+          <span className="min-w-0 flex-1 [overflow-wrap:anywhere]">{t.text}</span>
+        </div>
+      ))}
     </div>
   );
 }

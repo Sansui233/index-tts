@@ -30,7 +30,7 @@ export interface Generation {
   max_text_tokens_per_sentence: number;
   sentences_bucket_max_size: number;
 }
-export const defaults: Generation = {
+export const defaultGeneration: Generation = {
   mode: "normal",
   do_sample: true,
   top_p: 0.8,
@@ -48,13 +48,7 @@ export interface Take {
   take_index: number;
   audio_id: string | null;
   created_at: string;
-  snapshot: {
-    text: string;
-    speaker: string;
-    audio_id: string | null;
-    generation: Generation;
-  };
-  missing?: boolean;
+  snapshot: { text: string; speaker: string; audio_id: string | null; generation: Generation };
 }
 export interface Line {
   id: string;
@@ -63,8 +57,6 @@ export interface Line {
   speaker: string;
   takes: Take[];
   current_take_id: string | null;
-  revision: number;
-  selection_revision: number;
 }
 export interface Preset extends Named {
   bindings: Binding[];
@@ -74,55 +66,61 @@ export interface Session extends Preset {
   project_id: string;
   interval: number;
   lines: Line[];
-  text: string;
   outputs: string[];
   line_count?: number;
 }
 export interface Task extends Named {
   kind: string;
-  status: string;
+  title: string;
+  status: "queued" | "running" | "succeeded" | "failed" | "cancelled" | "interrupted";
   progress: number;
   message: string;
   error: string | null;
-  result: Audio | null;
+  result: Audio | { session_id: string } | null;
   session_ids: string[];
+  line_ids?: string[];
+  started_at?: string;
+  finished_at?: string;
 }
-export async function api<T>(
-  path: string,
-  method = "GET",
-  data?: unknown,
-  signal?: AbortSignal,
-): Promise<T> {
+export interface Cleanup {
+  deleted: number;
+  bytes: number;
+  failures: unknown[];
+}
+
+async function request<T>(method: string, path: string, data?: unknown): Promise<T> {
+  const form = data instanceof FormData;
   const response = await fetch("/api" + path, {
     method,
-    headers:
-      data instanceof FormData ? {} : { "Content-Type": "application/json" },
-    body:
-      data === undefined
-        ? undefined
-        : data instanceof FormData
-          ? data
-          : JSON.stringify(data),
-    signal,
+    headers: data === undefined || form ? {} : { "Content-Type": "application/json" },
+    body: data === undefined ? undefined : form ? data : JSON.stringify(data),
   });
   if (!response.ok) {
-    const body = await response
-      .json()
-      .catch(() => ({ detail: response.statusText }));
-    throw new Error(
-      typeof body.detail === "string"
-        ? body.detail
-        : JSON.stringify(body.detail),
-    );
+    const body = await response.json().catch(() => ({ detail: response.statusText }));
+    throw new Error(typeof body.detail === "string" ? body.detail : JSON.stringify(body.detail));
   }
   return response.json();
 }
+
+export const api = {
+  get: <T>(path: string) => request<T>("GET", path),
+  post: <T>(path: string, data?: unknown) => request<T>("POST", path, data),
+  put: <T>(path: string, data?: unknown) => request<T>("PUT", path, data),
+  patch: <T>(path: string, data?: unknown) => request<T>("PATCH", path, data),
+  del: <T>(path: string) => request<T>("DELETE", path),
+};
+
 export const fileUrl = (id: string, download = false) =>
   `/api/audio/${id}/file${download ? "?download=true" : ""}`;
-export const sessionInput = (s: Session) => ({
-  name: s.name,
-  project_id: s.project_id,
-  bindings: s.bindings,
-  generation: s.generation,
-  interval: s.interval,
-});
+
+export function upload(file: File) {
+  const data = new FormData();
+  data.append("file", file);
+  return api.post<Audio>("/audio/upload", data);
+}
+
+export const isActive = (t: Task) => t.status === "queued" || t.status === "running";
+export const isAudio = (a: Audio) => !a.path.endsWith(".srt");
+export const currentTake = (l: Line) => l.takes.find((t) => t.id === l.current_take_id);
+export const resultAudio = (t: Task) => (t.result && "path" in t.result ? t.result : null);
+export const taskTitle = (t: Task) => t.title || resultAudio(t)?.name || "";

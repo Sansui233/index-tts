@@ -7,8 +7,16 @@
 ## 目录
 
 ```text
-backend/       FastAPI 服务（推理、任务队列、角色/项目/session API）
-frontend/      React 前端（pnpm），构建产物 frontend/dist 由后端直接提供
+backend/       FastAPI 服务
+  routes.py      HTTP 层，只做请求转换
+  storage.py     原子 JSON 记录    tasks.py   单 worker 任务队列
+  engine.py      IndexTTS / Whisper 推理    audio.py   音频资源索引
+  library.py     角色与多人预设    sessions.py 项目、session、句子与 Take
+  generation.py  提交到 worker 的生成、字幕、合并任务
+frontend/      React + Tailwind 前端（pnpm），构建产物 frontend/dist 由后端直接提供
+  src/state.tsx  hash 路由、任务轮询、主题、toast    src/ui.tsx  基础组件与对话框
+  src/player.tsx 共享音频播放器    src/widgets.tsx 参考音频、推理参数、说话人绑定
+  src/pages/     各页面
 indextts/      IndexTTS 1.5 推理代码
 checkpoints/   模型权重与 config.yaml；Whisper 模型放在 checkpoints/whisper/whisper-{size}
 samples/       参考音频（可为指向其他目录的链接）

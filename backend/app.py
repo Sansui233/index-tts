@@ -1,56 +1,61 @@
 from contextlib import asynccontextmanager
+from types import SimpleNamespace
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse, FileResponse
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from .config import DATA, ROOT
-from .storage import Store
-from .tasks import Tasks
 from .audio import Audio
+from .config import DATA, ROOT
 from .engine import Engine
-from .sessions import Sessions, Busy
-from .generation import GenerationService
-from .routes import resource_routes
-from .session_routes import session_routes
+from .generation import Generation
+from .library import Library
+from .routes import build_router
+from .sessions import Sessions
+from .storage import Store
+from .tasks import Busy, Tasks
+
+
+def services(data, engine):
+    store = Store(data)
+    tasks = Tasks(store)
+    audio = Audio(store, tasks)
+    library = Library(store, audio)
+    sessions = Sessions(store, tasks, audio, library)
+    generation = Generation(store, tasks, audio, sessions, engine)
+    return SimpleNamespace(
+        store=store,
+        tasks=tasks,
+        audio=audio,
+        engine=engine,
+        library=library,
+        sessions=sessions,
+        generation=generation,
+    )
 
 
 def create_app(data=DATA, engine=None):
-    store = Store(data)
-    tasks = Tasks(store)
-    audio = Audio(store)
-    engine = engine or Engine()
-    sessions = Sessions(store, tasks, audio)
-    generation = GenerationService(store, audio, sessions, engine)
+    state = services(data, engine or Engine())
 
     @asynccontextmanager
     async def lifespan(app):
         yield
-        tasks.close()
-        if engine.status()["state"] == "loaded":
-            engine.unload()
+        state.tasks.close()
+        if state.engine.status()["state"] == "loaded":
+            state.engine.unload()
 
-    app = FastAPI(title="IndexTTS WebUI3", lifespan=lifespan)
-    app.state.store, app.state.tasks, app.state.sessions = store, tasks, sessions
+    app = FastAPI(title="IndexTTS WebUI", lifespan=lifespan)
+    app.state.store, app.state.services = state.store, state
 
     @app.exception_handler(ValueError)
     async def invalid(request, error):
-        return JSONResponse(
-            status_code=409 if isinstance(error, Busy) else 400,
-            content={"detail": str(error)},
-        )
+        status = 409 if isinstance(error, Busy) else 400
+        return JSONResponse(status_code=status, content={"detail": str(error)})
 
     @app.exception_handler(KeyError)
     async def missing(request, error):
-        return JSONResponse(status_code=404, content={"detail": str(error)})
+        return JSONResponse(status_code=404, content={"detail": str(error.args[0] if error.args else error)})
 
-    resources, validate = resource_routes(store, audio, tasks, engine, generation)
-    app.include_router(resources)
-    app.include_router(session_routes(store, sessions, tasks, generation, validate))
+    app.include_router(build_router(state))
     dist = ROOT / "frontend/dist"
     if dist.exists():
-        app.mount("/assets", StaticFiles(directory=dist / "assets"), name="assets")
-
-        @app.get("/")
-        def index():
-            return FileResponse(dist / "index.html")
-
+        app.mount("/", StaticFiles(directory=dist, html=True), name="frontend")
     return app

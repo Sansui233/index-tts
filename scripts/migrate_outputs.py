@@ -10,20 +10,26 @@ from pathlib import Path
 
 from backend.audio import Audio
 from backend.config import DATA, ROOT, AUDIO_EXTENSIONS
+from backend.library import Library
 from backend.schemas import Generation
 from backend.sessions import Sessions
 from backend.storage import Store, uid
 
 
 class Idle:
-    def busy(self, ids):
-        return False
+    """Migration runs offline: no queued tasks."""
+
+    def ensure_idle(self, ids):
+        pass
+
+    def active_audio_ids(self):
+        return set()
 
 
 def migrate(root=ROOT, destination=DATA):
     store = Store(destination)
-    audio = Audio(store)
-    sessions = Sessions(store, Idle(), audio)
+    audio = Audio(store, Idle())
+    sessions = Sessions(store, Idle(), audio, Library(store, audio))
     source = root / "outputs"
     report_path = store.path("migrations/outputs.json")
     report = (

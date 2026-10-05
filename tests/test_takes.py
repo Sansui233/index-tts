@@ -175,6 +175,20 @@ class TakeTests(unittest.TestCase):
             self.request("POST", self.linebase + "/takes/cleanup")["deleted"], 1
         )
 
+    def test_move_session_then_delete_project(self):
+        line = self.generate()
+        store = self.app.state.store
+        audio_id = line["takes"][0]["audio_id"]
+        other = self.request("POST", "/projects", {"name": "other"})
+        body = {k: self.session[k] for k in ("name", "bindings", "generation", "interval")}
+        self.request("PUT", self.base, {**body, "project_id": other["id"]})
+        moved = store.path(store.get("audio", audio_id)["path"])
+        self.assertTrue(moved.is_relative_to(store.path(f"projects/{other['id']}")))
+        self.assertTrue(moved.exists())
+        self.request("DELETE", "/projects/" + other["id"])
+        self.assertFalse(moved.exists())
+        self.assertEqual(self.client.get("/api" + self.base).status_code, 404)
+
     def test_reference_protects_unused_take(self):
         first = self.generate()
         old_audio = first["takes"][0]["audio_id"]

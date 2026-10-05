@@ -1,0 +1,383 @@
+import { useEffect, useRef, useState, type ReactNode } from "react";
+import { Check, Copy, Edit2, X } from "react-feather";
+
+export const cx = (...names: (string | false | null | undefined)[]) => names.filter(Boolean).join(" ");
+
+export function PageHeader({ title, sub, children }: { title: ReactNode; sub?: ReactNode; children?: ReactNode }) {
+  return (
+    <header className="mb-5 flex flex-wrap items-end justify-between gap-3">
+      <div className="min-w-0">
+        <h1 className="text-[22px] leading-snug font-semibold tracking-tight [overflow-wrap:anywhere]">{title}</h1>
+        {sub && <p className="mt-0.5 text-muted">{sub}</p>}
+      </div>
+      {children && <div className="flex flex-wrap items-center gap-2">{children}</div>}
+    </header>
+  );
+}
+
+export function Page({ children, wide }: { children: ReactNode; wide?: boolean }) {
+  return <div className={cx("mx-auto w-full px-6 py-7 lg:px-10", wide ? "max-w-[1400px]" : "max-w-[1120px]")}>{children}</div>;
+}
+
+export function Section({ title, extra, children, className }: { title?: ReactNode; extra?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <section className={cx("card p-4", className)}>
+      {(title || extra) && (
+        <div className="mb-3 flex items-center justify-between gap-2">
+          <h2 className="text-[13px] font-semibold">{title}</h2>
+          {extra}
+        </div>
+      )}
+      {children}
+    </section>
+  );
+}
+
+export function Field({ label, children, className }: { label: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <label className={cx("block min-w-0", className)}>
+      <span className="label">{label}</span>
+      {children}
+    </label>
+  );
+}
+
+export function Empty({ icon, title, children }: { icon?: ReactNode; title: string; children?: ReactNode }) {
+  return (
+    <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line px-6 py-12 text-center text-muted">
+      {icon && <div className="mb-1 grid size-10 place-items-center rounded-full bg-accent-soft text-accent">{icon}</div>}
+      <p className="font-medium text-fg">{title}</p>
+      {children}
+    </div>
+  );
+}
+
+export function Segmented<T extends string>({ value, options, onChange }: { value: T; options: { value: T; label: ReactNode; title?: string }[]; onChange: (v: T) => void }) {
+  return (
+    <div className="inline-flex rounded-lg bg-hover p-0.5">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          title={o.title}
+          onClick={() => onChange(o.value)}
+          className={cx(
+            "flex h-7 cursor-pointer items-center gap-1 rounded-md px-2.5 text-xs font-medium transition-colors",
+            value === o.value ? "bg-bg text-fg shadow-sm" : "text-muted hover:text-fg",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function Progress({ value, className }: { value: number; className?: string }) {
+  return (
+    <div className={cx("h-1 overflow-hidden rounded-full bg-hover", className)}>
+      <div className="h-full rounded-full bg-accent transition-[width] duration-500" style={{ width: `${Math.round(value * 100)}%` }} />
+    </div>
+  );
+}
+
+export function Spinner({ className }: { className?: string }) {
+  return <span className={cx("inline-block size-3.5 animate-spin rounded-full border-2 border-accent/25 border-t-accent", className)} />;
+}
+
+/* Escape closes only the most recently opened layer (popover over modal over sheet). */
+const layers: { current: () => void }[] = [];
+addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && layers.length) layers[layers.length - 1].current();
+});
+
+export function useEscape(onClose: () => void, active = true) {
+  const handler = useRef(onClose);
+  handler.current = onClose;
+  useEffect(() => {
+    if (!active) return;
+    layers.push(handler);
+    return () => void layers.splice(layers.indexOf(handler), 1);
+  }, [active]);
+}
+
+/* Right-side drawer. */
+export function Sheet({ open, title, onClose, children, footer, actions, wide }: { open: boolean; title: ReactNode; onClose: () => void; children: ReactNode; footer?: ReactNode; actions?: ReactNode; wide?: boolean }) {
+  useEscape(onClose, open);
+  if (!open) return null;
+  return (
+    <div className="fixed inset-0 z-40 flex justify-end bg-black/20 dark:bg-black/40" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <aside className={cx("flex h-full w-full flex-col border-l border-line bg-bg shadow-2xl", wide ? "max-w-[640px]" : "max-w-[420px]")}>
+        <div className="flex h-12 shrink-0 items-center justify-between border-b border-line pr-2 pl-4">
+          <h2 className="font-semibold">{title}</h2>
+          <div className="flex items-center gap-0.5">
+            {actions}
+            <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label="关闭">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4">{children}</div>
+        {footer && <div className="flex shrink-0 items-center gap-2 border-t border-line p-3">{footer}</div>}
+      </aside>
+    </div>
+  );
+}
+
+/* Promise-based dialogs replacing window.prompt / confirm. */
+export interface DialogField {
+  key: string;
+  label: string;
+  value?: string;
+  options?: { value: string; label: string }[];
+}
+interface DialogRequest {
+  title: string;
+  fields: DialogField[];
+  action: string;
+  resolve: (values: Record<string, string> | null) => void;
+}
+/* Popover at the pointer: a confirmation, or a one-field prompt when `input` is set. */
+interface ConfirmRequest {
+  x: number;
+  y: number;
+  message: string;
+  action: string;
+  input?: string;
+  resolve: (value: string | null) => void;
+}
+type Anchor = { clientX: number; clientY: number; currentTarget: EventTarget | null };
+let showDialog: (request: DialogRequest) => void = () => {};
+let showConfirm: (request: ConfirmRequest) => void = () => {};
+
+export function ask(title: string, fields: DialogField[], action = "确定") {
+  return new Promise<Record<string, string> | null>((resolve) => showDialog({ title, fields, action, resolve }));
+}
+
+/* Second-step confirmation floating at the pointer (or the button, for keyboard clicks). */
+export function confirm(event: Anchor, message: string, action = "删除") {
+  const { clientX: x, clientY: y } = point(event);
+  return new Promise<boolean>((resolve) => showConfirm({ x, y, message, action, resolve: (v) => resolve(v !== null) }));
+}
+
+/* Single text field at the pointer; resolves to the trimmed text, or null when cancelled. */
+export function promptAt(event: Anchor, message: string, value: string, action = "确定") {
+  const { clientX: x, clientY: y } = point(event);
+  return new Promise<string | null>((resolve) => showConfirm({ x, y, message, action, input: value, resolve }));
+}
+
+/* Pointer position, or the element's corner for keyboard clicks (no coordinates).
+   Capture it before any await: React clears currentTarget after the handler returns. */
+export function point({ clientX: x, clientY: y, currentTarget }: Anchor): Anchor {
+  if (!x && !y && currentTarget instanceof Element) {
+    const box = currentTarget.getBoundingClientRect();
+    [x, y] = [box.left, box.bottom];
+  }
+  return { clientX: x, clientY: y, currentTarget: null };
+}
+
+export function Dialogs() {
+  const [request, setRequest] = useState<DialogRequest | null>(null);
+  const [pending, setPending] = useState<ConfirmRequest | null>(null);
+  const [values, setValues] = useState<Record<string, string>>({});
+  const [text, setText] = useState("");
+  useEffect(() => {
+    showDialog = (r) => {
+      setRequest(r);
+      setValues(Object.fromEntries(r.fields.map((f) => [f.key, f.value ?? f.options?.[0]?.value ?? ""])));
+    };
+    showConfirm = (r) => {
+      setText(r.input ?? "");
+      setPending((old) => {
+        old?.resolve(null);
+        return r;
+      });
+    };
+  }, []);
+  const close = (result: Record<string, string> | null) => {
+    request?.resolve(result);
+    setRequest(null);
+  };
+  const settle = (ok: boolean) => {
+    pending?.resolve(ok ? text.trim() : null);
+    setPending(null);
+  };
+  useEscape(() => close(null), !!request);
+  useEscape(() => settle(false), !!pending);
+
+  if (pending) {
+    const prompt = pending.input !== undefined;
+    const width = prompt ? 280 : 240;
+    const left = pending.x + width + 12 > innerWidth ? pending.x - width - 6 : pending.x + 6;
+    const top = Math.min(pending.y + 6, innerHeight - (prompt ? 140 : 110));
+    return (
+      <div className="fixed inset-0 z-50" onMouseDown={(e) => e.target === e.currentTarget && settle(false)}>
+        <form
+          className="card absolute p-3 shadow-xl"
+          style={{ left: Math.max(8, left), top, width }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!prompt || text.trim()) settle(true);
+          }}
+        >
+          <p className="text-xs leading-relaxed">{pending.message}</p>
+          {prompt && <input className="input mt-2" autoFocus value={text} onChange={(e) => setText(e.target.value)} onFocus={(e) => e.currentTarget.select()} />}
+          <div className="mt-2.5 flex justify-end gap-1.5">
+            <button type="button" className="btn btn-sm" onClick={() => settle(false)}>
+              取消
+            </button>
+            <button
+              type="submit"
+              autoFocus={!prompt}
+              disabled={prompt && !text.trim()}
+              className={cx("btn btn-sm", prompt ? "btn-primary" : "border-transparent bg-danger text-white hover:bg-danger hover:brightness-110")}
+            >
+              {pending.action}
+            </button>
+          </div>
+        </form>
+      </div>
+    );
+  }
+  if (!request) return null;
+  const ready = request.fields.every((f) => values[f.key]?.trim());
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/25 p-4 dark:bg-black/50" onMouseDown={(e) => e.target === e.currentTarget && close(null)}>
+      <form
+        className="card w-full max-w-sm p-5 shadow-2xl"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (ready) close(values);
+        }}
+      >
+        <h2 className="text-[15px] font-semibold">{request.title}</h2>
+        <div className="mt-4 space-y-3">
+          {request.fields.map((f, i) => (
+            <Field key={f.key} label={f.label}>
+              {f.options ? (
+                <select className="input" value={values[f.key]} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })}>
+                  {f.options.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input className="input" autoFocus={i === 0} value={values[f.key]} onChange={(e) => setValues({ ...values, [f.key]: e.target.value })} />
+              )}
+            </Field>
+          ))}
+        </div>
+        <div className="mt-5 flex justify-end gap-2">
+          <button type="button" className="btn" onClick={() => close(null)}>
+            取消
+          </button>
+          <button type="submit" disabled={!ready} className="btn btn-primary">
+            {request.action}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
+export function ago(iso: string) {
+  const s = (Date.now() - new Date(iso).getTime()) / 1000;
+  if (s < 60) return "刚刚";
+  if (s < 3600) return `${Math.floor(s / 60)} 分钟前`;
+  if (s < 86400) return `${Math.floor(s / 3600)} 小时前`;
+  if (s < 86400 * 7) return `${Math.floor(s / 86400)} 天前`;
+  return new Date(iso).toLocaleDateString();
+}
+
+/* Title that edits in place: full name, wraps past max width, pencil on hover/focus.
+   Saves on blur or Enter; Escape reverts. */
+export function NameInput({ value, onSave, label, className }: { value: string; onSave: (name: string) => Promise<boolean>; label: string; className?: string }) {
+  const [name, setName] = useState(value);
+  const field = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => setName(value), [value]);
+  async function commit() {
+    const next = name.trim();
+    if (!next || next === value || !(await onSave(next))) setName(value);
+  }
+  return (
+    <span className={cx("group inline-flex min-w-0 items-start gap-1", className)}>
+      <textarea
+        ref={field}
+        rows={1}
+        aria-label={label}
+        className="-ml-1.5 max-w-full min-w-8 resize-none rounded-md border border-transparent bg-transparent px-1.5 font-semibold [overflow-wrap:anywhere] outline-none [field-sizing:content] hover:border-line focus:border-accent/60 focus:ring-3 focus:ring-accent-soft"
+        value={name}
+        onChange={(e) => setName(e.target.value.replace(/\n/g, ""))}
+        onBlur={() => void commit()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            e.currentTarget.blur();
+          }
+          if (e.key === "Escape") {
+            setName(value);
+            requestAnimationFrame(() => field.current?.blur());
+          }
+        }}
+      />
+      <button
+        tabIndex={-1}
+        aria-label={`修改${label}`}
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => field.current?.focus()}
+        className="mt-[0.35em] shrink-0 cursor-pointer text-muted opacity-0 transition-opacity group-focus-within:text-accent group-focus-within:opacity-100 group-hover:opacity-100"
+      >
+        <Edit2 size={13} />
+      </button>
+    </span>
+  );
+}
+
+/* Copy text; the icon turns into a check for a moment. */
+export function CopyButton({ text, label = "复制", className }: { text: string; label?: string; className?: string }) {
+  const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    if (!copied) return;
+    const timer = setTimeout(() => setCopied(false), 1500);
+    return () => clearTimeout(timer);
+  }, [copied]);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // The Clipboard API needs a secure context; plain http over LAN lands here.
+      const area = Object.assign(document.createElement("textarea"), { value: text });
+      document.body.append(area);
+      area.select();
+      document.execCommand("copy");
+      area.remove();
+    }
+    setCopied(true);
+  }
+  return (
+    <button className={cx("tip btn btn-ghost btn-sm btn-icon", copied && "text-ok", className)} data-tip={copied ? "已复制" : label} aria-label={label} onClick={() => void copy()}>
+      {copied ? <Check size={13} /> : <Copy size={13} />}
+    </button>
+  );
+}
+
+/* Centered dialog. */
+export function Modal({ title, onClose, children, actions }: { title: ReactNode; onClose: () => void; children: ReactNode; actions?: ReactNode }) {
+  useEscape(onClose);
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-black/25 p-4 dark:bg-black/50" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="card flex max-h-full w-full max-w-md flex-col shadow-2xl">
+        <div className="flex h-12 shrink-0 items-center justify-between gap-2 border-b border-line pr-2 pl-5">
+          <h2 className="min-w-0 truncate text-[15px] font-semibold">{title}</h2>
+          <div className="flex items-center gap-0.5">
+            {actions}
+            <button className="btn btn-ghost btn-icon" onClick={onClose} aria-label="关闭">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+        <div className="min-h-0 overflow-y-auto p-5">{children}</div>
+      </div>
+    </div>
+  );
+}

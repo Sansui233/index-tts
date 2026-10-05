@@ -76,5 +76,9 @@ class Source(Input):
     path: str
 
 
+class Ids(Input):
+    ids: list[str] = Field(min_length=1)
+
+
 class Order(Input):
     line_ids: list[str]

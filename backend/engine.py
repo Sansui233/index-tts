@@ -1,9 +1,44 @@
-"""Lazy inference adapters; this module never imports Gradio."""
+"""Lazy inference adapters for IndexTTS and local Whisper."""
 
 import gc
 import subprocess
+import wave
 from threading import RLock
 from .config import ROOT
+
+WHISPER_MODELS = ("tiny", "base", "small", "medium")
+# Old JSON may store whole-number floats as ints; transformers 4.36 needs floats.
+FLOAT_OPTIONS = ("top_p", "temperature", "length_penalty", "repetition_penalty")
+
+
+def whisper_path(model):
+    return ROOT / "checkpoints/whisper" / f"whisper-{model}"
+
+
+def free_cuda():
+    gc.collect()
+    import torch
+
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+
+
+def srt_time(seconds):
+    ms = max(0, round(float(seconds) * 1000))
+    return f"{ms // 3600000:02}:{ms // 60000 % 60:02}:{ms // 1000 % 60:02},{ms % 1000:03}"
+
+
+def to_srt(chunks, duration):
+    from opencc import OpenCC
+
+    convert = OpenCC("t2s")
+    blocks = []
+    for number, chunk in enumerate(chunks, 1):
+        start, end = chunk["timestamp"]
+        end = duration if end is None else end
+        text = convert.convert(chunk["text"].strip())
+        blocks.append(f"{number}\n{srt_time(start or 0)} --> {srt_time(end)}\n{text}\n")
+    return "\n".join(blocks)
 
 
 class Engine:
@@ -41,11 +76,7 @@ class Engine:
         with self.lock:
             self.state = "unloading"
             self.tts = None
-            gc.collect()
-            import torch
-
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            free_cuda()
             self.state, self.error = "unloaded", None
             return self.status()
 
@@ -53,56 +84,36 @@ class Engine:
         with self.lock:
             self.load(progress)
             options = dict(settings)
-            # Existing/migrated JSON may encode whole-number floats as integers.
-            # Transformers 4.36 requires float types for penalty parameters.
-            for name in (
-                "top_p",
-                "temperature",
-                "length_penalty",
-                "repetition_penalty",
-            ):
+            for name in FLOAT_OPTIONS:
                 options[name] = float(options[name])
-            mode = options.pop("mode")
-            if options["top_k"] == 0:
-                options["top_k"] = None
-            if mode == "normal":
+            options["top_k"] = options["top_k"] or None
+            fast = options.pop("mode") == "fast"
+            if not fast:
                 options.pop("sentences_bucket_max_size", None)
             self.tts.gr_progress = progress
             try:
-                method = self.tts.infer_fast if mode == "fast" else self.tts.infer
+                method = self.tts.infer_fast if fast else self.tts.infer
                 method(str(source), text, str(output), **options)
             finally:
                 self.tts.gr_progress = None
 
     def subtitles(self, source, output, model, language, progress):
-        # Same worker as TTS: do not keep both models on the GPU.
+        # Same worker as TTS: never keep both models on the GPU.
         self.unload()
-        path = ROOT / "checkpoints/whisper" / f"whisper-{model}"
+        path = whisper_path(model)
         if not (path / "config.json").exists():
             raise ValueError(f"缺少本地 Whisper 模型：{path}")
-        from transformers import pipeline
-        from opencc import OpenCC
         import torch
+        from transformers import pipeline
 
         temporary = output.with_suffix(".input.wav")
         recognizer = None
         try:
             progress(0.1, "转换音频")
-            subprocess.run(
-                [
-                    "ffmpeg",
-                    "-y",
-                    "-i",
-                    str(source),
-                    "-ac",
-                    "1",
-                    "-ar",
-                    "16000",
-                    str(temporary),
-                ],
-                check=True,
-                capture_output=True,
-            )
+            command = ["ffmpeg", "-y", "-i", str(source), "-ac", "1", "-ar", "16000"]
+            subprocess.run([*command, str(temporary)], check=True, capture_output=True)
+            with wave.open(str(temporary), "rb") as wav:
+                duration = wav.getnframes() / wav.getframerate()
             progress(0.2, "加载 Whisper")
             recognizer = pipeline(
                 "automatic-speech-recognition",
@@ -123,29 +134,8 @@ class Engine:
                 stride_length_s=[6, 3],
                 batch_size=1,
             )
-            convert = OpenCC("t2s")
-            lines = []
-
-            def stamp(value):
-                ms = max(0, round(float(value) * 1000))
-                return f"{ms // 3600000:02}:{ms // 60000 % 60:02}:{ms // 1000 % 60:02},{ms % 1000:03}"
-
-            chunks = result["chunks"]
-            import wave
-
-            with wave.open(str(temporary), "rb") as wav:
-                duration = wav.getnframes() / wav.getframerate()
-            for index, chunk in enumerate(chunks):
-                start, end = chunk["timestamp"]
-                start = start if start is not None else 0
-                end = end if end is not None else duration
-                lines.append(
-                    f"{index + 1}\n{stamp(start)} --> {stamp(end)}\n{convert.convert(chunk['text'].strip())}\n"
-                )
-            output.write_text("\n".join(lines), encoding="utf-8")
+            output.write_text(to_srt(result["chunks"], duration), encoding="utf-8")
         finally:
             temporary.unlink(missing_ok=True)
             del recognizer
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            free_cuda()
